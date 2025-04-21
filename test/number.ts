@@ -72,6 +72,13 @@ combineCall(
     checkError("-" + str.slice(0, i), true);
     checkError("+" + str.slice(0, i), true);
 
+    checkError("1" + str.slice(0, i), true);
+    checkError("-1" + str.slice(0, i), true);
+    checkError("+1" + str.slice(0, i), true);
+    checkError("0" + str.slice(0, i), true);
+    checkError("-0" + str.slice(0, i), true);
+    checkError("+0" + str.slice(0, i), true);
+
     checkError(str.slice(0, i), i !== 8, { acceptInfinity: true });
     checkError("-" + str.slice(0, i), i !== 8, { acceptInfinity: true });
     checkError("+" + str.slice(0, i), true, { acceptInfinity: true });
@@ -89,12 +96,85 @@ combineCall(
     checkError("-" + str.slice(0, i), true);
     checkError("+" + str.slice(0, i), true);
 
+    checkError("1" + str.slice(0, i), true);
+    checkError("-1" + str.slice(0, i), true);
+    checkError("+1" + str.slice(0, i), true);
+    checkError("0" + str.slice(0, i), true);
+    checkError("-0" + str.slice(0, i), true);
+    checkError("+0" + str.slice(0, i), true);
+
     checkError(str.slice(0, i), i !== 3, { acceptNan: true });
     checkError("-" + str.slice(0, i), true, { acceptNan: true });
     checkError("+" + str.slice(0, i), true, { acceptNan: true });
 
     checkError("+" + str.slice(0, i), true, {
       acceptNan: true,
+      acceptPositiveSign: true,
+    });
+  }
+}
+{
+  for (const sign of ["", "+", "-"]) {
+    const testcases: (string | [string])[] = [
+      `${sign}0x`,
+      [`${sign}0x1`],
+      [`${sign}0xF`],
+      `${sign}0x1g`,
+      `${sign}0X`,
+      [`${sign}0X1`],
+      [`${sign}0XF`],
+      `${sign}0X1g`,
+    ];
+    runTestCases(makeRejectedTestcases(testcases));
+    runTestCases(sign === "+" ? makeRejectedTestcases(testcases) : testcases, {
+      acceptHexadecimalInteger: true,
+    });
+    runTestCases(testcases, {
+      acceptHexadecimalInteger: true,
+      acceptPositiveSign: true,
+    });
+  }
+}
+{
+  for (const sign of ["", "+", "-"]) {
+    const testcases: (string | [string])[] = [
+      `${sign}0o`,
+      [`${sign}0o1`],
+      `${sign}0oF`,
+      `${sign}0o1g`,
+      `${sign}0O`,
+      [`${sign}0O1`],
+      `${sign}0OF`,
+      `${sign}0O1g`,
+    ];
+    runTestCases(makeRejectedTestcases(testcases));
+    runTestCases(sign === "+" ? makeRejectedTestcases(testcases) : testcases, {
+      acceptOctalInteger: true,
+    });
+    runTestCases(testcases, {
+      acceptOctalInteger: true,
+      acceptPositiveSign: true,
+    });
+  }
+}
+{
+  for (const sign of ["", "+", "-"]) {
+    const testcases: (string | [string])[] = [
+      `${sign}0b`,
+      [`${sign}0b1`],
+      `${sign}0bF`,
+      `${sign}0b1g`,
+      `${sign}0B`,
+      [`${sign}0B1`],
+      `${sign}0BF`,
+      `${sign}0B1g`,
+    ];
+    runTestCases(makeRejectedTestcases(testcases));
+    runTestCases(sign === "+" ? makeRejectedTestcases(testcases) : testcases, {
+      acceptBinaryInteger: true,
+    });
+    runTestCases(testcases, {
+      acceptBinaryInteger: true,
       acceptPositiveSign: true,
     });
   }

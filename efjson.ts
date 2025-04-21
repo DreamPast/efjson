@@ -45,7 +45,7 @@ const stringIncludes: (src: string, dst: string) => boolean =
   typeof (String.prototype as any).includes === "function"
     ? (src, dst) => (src as any).includes(dst)
     : (src, dst) => {
-        for (let i = -1; ++i < src.length && src[i] == dst[0]; ) {
+        for (let i = -1; ++i < src.length && src[i] === dst[0]; ) {
           let j = 0;
           while (j < dst.length && src[i + j] === dst[j]) ++j;
           if (j === dst.length) return true;
@@ -66,13 +66,14 @@ const isWhitespace = (c: string, fitJson5?: boolean) => {
   return fitJson5 && stringIncludes(EXTRA_WHITESPACE, c);
 };
 const isNextLine = (c: string) => stringIncludes("\n\u2028\u2029\r", c);
-
 const isNumberSeparator = (c: string, fitJson5?: boolean) =>
   c === EOF || isWhitespace(c, fitJson5) || c === "," || c === "]" || c === "}";
 const isControl = (c: string) => {
   const code = c.charCodeAt(0);
   return code >= 0 && code <= 0x1f;
 };
+const isHex = (c: string) =>
+  (c >= "0" && c <= "9") || (c >= "a" && c <= "f") || (c >= "A" && c <= "F");
 
 const ESCAPE_TABLE: { [k: string]: string | undefined } = {
   '"': '"',
@@ -114,6 +115,9 @@ const enum ValueState {
   STRING_ESCAPE_HEX, // used to check \xNN
   NUMBER_INFINITY, // used to check "Infinity"
   NUMBER_NAN, // used to check "NaN"
+  NUMBER_HEX, // used to check "NaN"
+  NUMBER_OCT, // used to check "NaN"
+  NUMBER_BIN, // used to check "NaN"
 }
 
 const enum LocateState {
@@ -201,17 +205,17 @@ export type JsonOption = {
    * whether to accept hexadecimal integer
    * @example '0x1', '0x0'
    */
-  // acceptHexadecimalInteger?: boolean;
+  acceptHexadecimalInteger?: boolean;
   /**
    * whether to accept octal integer
    * @example '0o1', '0o0'
    */
-  // acceptOctalInteger?: boolean;
+  acceptOctalInteger?: boolean;
   /**
    * whether to accept binary integer
    * @example '0b1', '0b0'
    */
-  // acceptBinaryInteger?: boolean;
+  acceptBinaryInteger?: boolean;
 
   // << comment >>
   // acceptSingleLineComment?: boolean;
@@ -239,7 +243,7 @@ export const JSON5_OPTION: JsonOption = {
   acceptEmptyInteger: true,
   acceptNan: true,
   acceptInfinity: true,
-  // acceptHexadecimalInteger: true,
+  acceptHexadecimalInteger: true,
 
   // << comment >>
   // acceptSingleLineComment: true,
@@ -324,12 +328,22 @@ namespace TokenInfo {
   type _NumberNan = {
     subtype: "nan";
   } & ({ index: 0 | 1; done?: undefined } | { index: 2; done: true });
+  /* JSON5 */
+  type _NumberNotDecimalStart = {
+    subtype: "hex_start" | "oct_start" | "bin_start";
+  };
+  /* JSON5 */
+  type _NumberNotDecimal = {
+    subtype: "hex" | "oct" | "bin";
+  };
   type _Number = { type: "number" } & (
     | _NumberSign
     | _NumberDigit
     | _NumberStart
     | _NumberInfinity
     | _NumberNan
+    | _NumberNotDecimalStart
+    | _NumberNotDecimal
   );
 
   type _NotKeyLocation = "root" | "value" | "object" | "array" | "element";
@@ -440,7 +454,10 @@ export class JsonStreamParser {
    *   `NULL`/`TRUE`/`FALSE`: [number] current index of string
    *
    *   `STRING_ESCAPE_HEX`: [string] current hex string
+   *
    *   `NUMBER_NAN`|`NUMBER_INFINITY`: [number] current index of string
+   *
+   *   `NUMBER_HEX`|`NUMBER_OCT`|`NUMBER_BIN`: [boolean] whether already accept digits
    */
   private _substate: any;
   /**
@@ -539,7 +556,6 @@ export class JsonStreamParser {
       case LocateState.ELEMENT_END:
         this._throw("unexpected EOF while parsing array");
     }
-    this._throw("unexpected EOF");
   }
   private _handleNumberSeparator(c: string): TokenInfo.JsonTokenInfo {
     if (this._substate === -1)
@@ -863,11 +879,7 @@ export class JsonStreamParser {
         }
         this._throw(`bad escaped character ${formatChar(c)}`);
       case ValueState.STRING_UNICODE:
-        if (
-          (c >= "0" && c <= "9") ||
-          (c >= "a" && c <= "f") ||
-          (c >= "A" && c <= "F")
-        ) {
+        if (isHex(c)) {
           this._substate += c;
           if (this._substate.length === 4) {
             this._state = ValueState.STRING;
@@ -888,11 +900,7 @@ export class JsonStreamParser {
         }
         this._throw(`bad Unicode escape character ${formatChar(c)}`);
       case ValueState.STRING_ESCAPE_HEX:
-        if (
-          (c >= "0" && c <= "9") ||
-          (c >= "a" && c <= "f") ||
-          (c >= "A" && c <= "F")
-        ) {
+        if (isHex(c)) {
           this._substate += c;
           if (this._substate.length === 2) {
             this._state = ValueState.STRING;
@@ -944,6 +952,53 @@ export class JsonStreamParser {
             subtype: "fraction_start",
           };
         }
+        if (this._substate === -1) {
+          if (this._option.acceptInfinity && c === "I") {
+            // "-Infinity"
+            this._state = ValueState.NUMBER_INFINITY;
+            this._substate = 1;
+            return {
+              location: LOCATION_NOT_KEY_TABLE[this._location],
+              type: "number",
+              subtype: "infinity",
+              index: 0,
+            };
+          }
+          this._throw("the integer part cannnot be empty");
+        }
+
+        if (this._substate === 0) {
+          const obj: any = {
+            location: LOCATION_NOT_KEY_TABLE[this._location],
+            type: "number",
+          };
+          if (
+            this._option.acceptHexadecimalInteger &&
+            (c === "x" || c === "X")
+          ) {
+            obj.subtype = "hex_start";
+            this._state = ValueState.NUMBER_HEX;
+            this._substate = false;
+            return obj;
+          } else if (
+            this._option.acceptOctalInteger &&
+            (c === "o" || c === "O")
+          ) {
+            obj.subtype = "oct_start";
+            this._state = ValueState.NUMBER_OCT;
+            this._substate = false;
+            return obj;
+          } else if (
+            this._option.acceptBinaryInteger &&
+            (c === "b" || c === "B")
+          ) {
+            obj.subtype = "bin_start";
+            this._state = ValueState.NUMBER_BIN;
+            this._substate = false;
+            return obj;
+          }
+        }
+
         if (c === "e" || c === "E") {
           this._state = ValueState.NUMBER_EXPONENT;
           this._substate = 0;
@@ -951,17 +1006,6 @@ export class JsonStreamParser {
             location: LOCATION_NOT_KEY_TABLE[this._location],
             type: "number",
             subtype: "exponent_start",
-          };
-        }
-        if (this._option.acceptInfinity && c === "I") {
-          // "-Infinity"
-          this._state = ValueState.NUMBER_INFINITY;
-          this._substate = 1;
-          return {
-            location: LOCATION_NOT_KEY_TABLE[this._location],
-            type: "number",
-            subtype: "infinity",
-            index: 0,
           };
         }
         if (isNumberSeparator(c, this._option.acceptJson5Whitespace))
@@ -1033,6 +1077,66 @@ export class JsonStreamParser {
           `unexpected character ${formatChar(
             c
           )} while parsing the exponent part of the number`
+        );
+      case ValueState.NUMBER_HEX:
+        if (isHex(c)) {
+          this._substate = true;
+          return {
+            location: LOCATION_NOT_KEY_TABLE[this._location],
+            type: "number",
+            subtype: "hex",
+          };
+        }
+        if (c === "e" || c === "E")
+          this._throw("exponent not allowed in hexadecimal number");
+        if (c === ".")
+          this._throw("fraction not allowed in hexadecimal number");
+        if (this._substate === false)
+          this._throw("the hexadecimal integer part cannot be empty");
+        if (isNumberSeparator(c, this._option.acceptJson5Whitespace))
+          return this._handleNumberSeparator(c);
+        this._throw(
+          `unexpected character ${formatChar} while parsing hexadecimal number`
+        );
+
+      case ValueState.NUMBER_OCT:
+        if (c >= "0" && c <= "7") {
+          this._substate = true;
+          return {
+            location: LOCATION_NOT_KEY_TABLE[this._location],
+            type: "number",
+            subtype: "oct",
+          };
+        }
+        if (c === "e" || c === "E")
+          this._throw("exponent not allowed in octal number");
+        if (c === ".") this._throw("fraction not allowed in octal number");
+        if (this._substate === false)
+          this._throw("the octal integer part cannot be empty");
+        if (isNumberSeparator(c, this._option.acceptJson5Whitespace))
+          return this._handleNumberSeparator(c);
+        this._throw(
+          `unexpected character ${formatChar} while parsing octal number`
+        );
+
+      case ValueState.NUMBER_BIN:
+        if (c === "0" || c === "1") {
+          this._substate = true;
+          return {
+            location: LOCATION_NOT_KEY_TABLE[this._location],
+            type: "number",
+            subtype: "bin",
+          };
+        }
+        if (c === "e" || c === "E")
+          this._throw("exponent not allowed in binary number");
+        if (c === ".") this._throw("fraction not allowed in binary number");
+        if (this._substate === false)
+          this._throw("the binary integer part cannot be empty");
+        if (isNumberSeparator(c, this._option.acceptJson5Whitespace))
+          return this._handleNumberSeparator(c);
+        this._throw(
+          `unexpected character ${formatChar} while parsing binary number`
         );
     }
   }
