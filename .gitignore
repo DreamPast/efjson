@@ -1,0 +1,12 @@
+# Mac OS specific
+.DS_Store
+
+# Editor directories and files
+.vscode/
+.idea/
+.vs/
+
+# JavaScript
+node_modules/
+dist/
+pnpm-lock.yaml

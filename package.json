@@ -1,0 +1,21 @@
+{
+  "name": "efjson",
+  "version": "0.1.0",
+  "description": "a streaming JSON parser",
+  "main": "efjson.ts",
+  "keywords": [
+    "json",
+    "streaming"
+  ],
+  "author": "Jin Cai",
+  "license": "MIT",
+  "scripts": {
+    "build_cjs": "tsc efjson.ts --target es6 --module commonjs --outDir dist && uglifyjs -c -m --output dist/efjson.min.cjs dist/efjson.js --wrap efjson",
+    "build_mjs": "tsc efjson.ts --target es6 --outDir dist && uglifyjs -c -m --output dist/efjson.min.mjs dist/efjson.js --module",
+    "compress": "uglifyjs -c -m --output efjson.min.js efjson.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "uglify-js": "^3.19.3"
+  }
+}
