@@ -56,6 +56,7 @@ const stringIncludes: (src: string, dst: string) => boolean =
 const repeatString = (s: string, n: number) => s.repeat(n);
 const stringIncludes = (src: string, dst: string) => src.includes(dst);
 
+const EOF = "\u0000";
 const EXTRA_WHITESPACE =
   /* <VT>, <FF>, <NBSP>, <BOM>, <USP> */
   "\u000B\u000C\u00A0\uFEFF\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u202F\u205F\u3000";
@@ -83,7 +84,11 @@ const ESCAPE_TABLE: { [k: string]: string | undefined } = {
   r: "\r",
   t: "\t",
 };
-const EOF = "\u0000";
+const ESCAPE_TABLE2: { [k: string]: string | undefined } = {
+  "'": "'",
+  v: "\v",
+  0: EOF,
+};
 
 const formatChar = (c: string) => {
   const code = c.charCodeAt(0);
@@ -93,7 +98,7 @@ const formatChar = (c: string) => {
   return `\\u${repeatString("0", 4 - str.length)}${str}`;
 };
 
-const enum VALUE_STATE {
+const enum ValueState {
   EMPTY,
   NULL,
   TRUE,
@@ -107,6 +112,8 @@ const enum VALUE_STATE {
   /* JSON5 */
   STRING_MULTILINE_CR, // used to check \r\n
   STRING_ESCAPE_HEX, // used to check \xNN
+  NUMBER_INFINITY, // used to check "Infinity"
+  NUMBER_NAN, // used to check "NaN"
 }
 
 const enum LocateState {
@@ -185,11 +192,11 @@ export type JsonOption = {
   /**
    * whether to accept NaN
    */
-  // acceptNan?: boolean;
+  acceptNan?: boolean;
   /**
    * whether to accept Infinity
    */
-  // acceptInfinity?: boolean;
+  acceptInfinity?: boolean;
   /**
    * whether to accept hexadecimal integer
    * @example '0x1', '0x0'
@@ -210,7 +217,7 @@ export type JsonOption = {
   // acceptSingleLineComment?: boolean;
   // accpetMultiLineComment?: boolean;
 };
-const JSON5_OPTION: JsonOption = {
+export const JSON5_OPTION: JsonOption = {
   // << white space >>
   acceptJson5Whitespace: true,
 
@@ -230,8 +237,8 @@ const JSON5_OPTION: JsonOption = {
   acceptPositiveSign: true,
   acceptEmptyFraction: true,
   acceptEmptyInteger: true,
-  // acceptNan: true,
-  // acceptInfinity: true,
+  acceptNan: true,
+  acceptInfinity: true,
   // acceptHexadecimalInteger: true,
 
   // << comment >>
@@ -303,10 +310,26 @@ namespace TokenInfo {
   type _NumberStart = {
     subtype: "fraction_start" | "exponent_start";
   };
+  /* JSON5 */
+  type _NumberInfinity = {
+    subtype: "infinity";
+  } & (
+    | {
+        index: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+        done?: undefined;
+      }
+    | { index: 7; done: true }
+  );
+  /* JSON5 */
+  type _NumberNan = {
+    subtype: "nan";
+  } & ({ index: 0 | 1; done?: undefined } | { index: 2; done: true });
   type _Number = { type: "number" } & (
     | _NumberSign
     | _NumberDigit
     | _NumberStart
+    | _NumberInfinity
+    | _NumberNan
   );
 
   type _NotKeyLocation = "root" | "value" | "object" | "array" | "element";
@@ -397,7 +420,7 @@ export class JsonStreamParser {
    * - parse boolean
    * - parse string
    */
-  private _state = VALUE_STATE.EMPTY;
+  private _state = ValueState.EMPTY;
   /**
    * primary value substate (see following)
    *
@@ -417,6 +440,7 @@ export class JsonStreamParser {
    *   `NULL`/`TRUE`/`FALSE`: [number] current index of string
    *
    *   `STRING_ESCAPE_HEX`: [string] current hex string
+   *   `NUMBER_NAN`|`NUMBER_INFINITY`: [number] current index of string
    */
   private _substate: any;
   /**
@@ -463,7 +487,7 @@ export class JsonStreamParser {
       (this._location === LocateState.ELEMENT_START &&
         this._option.acceptTrailingCommaInArray)
     ) {
-      this._state = VALUE_STATE.EMPTY;
+      this._state = ValueState.EMPTY;
       this._location = this._nextState(this._stack.pop()!);
       return {
         location: LOCATION_NOT_KEY_TABLE[this._location],
@@ -484,7 +508,7 @@ export class JsonStreamParser {
       (this._location === LocateState.KEY_START &&
         this._option.acceptTrailingCommaInObject)
     ) {
-      this._state = VALUE_STATE.EMPTY;
+      this._state = ValueState.EMPTY;
       this._location = this._nextState(this._stack.pop()!);
       return {
         location: LOCATION_NOT_KEY_TABLE[this._location],
@@ -520,7 +544,7 @@ export class JsonStreamParser {
   private _handleNumberSeparator(c: string): TokenInfo.JsonTokenInfo {
     if (this._substate === -1)
       this._throw("a number cannot consist of only a negative sign");
-    this._state = VALUE_STATE.EMPTY;
+    this._state = ValueState.EMPTY;
     this._location = this._nextState(this._location);
     if (c === EOF) return this._handleEOF();
     if (c === "}") return this._handleObjectEnd();
@@ -531,10 +555,37 @@ export class JsonStreamParser {
       type: "whitespace",
     };
   }
+  private _handleLiteral(
+    c: string,
+    literal: string,
+    nextState: ValueState
+  ): TokenInfo.JsonTokenInfo {
+    const dc = literal[this._substate];
+    if (c === dc) {
+      if (++this._substate === literal.length) {
+        this._state = nextState;
+        this._location = this._nextState(this._location);
+        return {
+          location: LOCATION_NOT_KEY_TABLE[this._location],
+          type: literal as any,
+          index: (this._substate - 1) as any,
+          done: true,
+        };
+      }
+      return {
+        location: LOCATION_NOT_KEY_TABLE[this._location],
+        type: literal as any,
+        index: (this._substate - 1) as any,
+      };
+    }
+    this._throw(
+      `expected '${dc}' while parsing ${literal}, but got ${formatChar(c)}`
+    );
+  }
 
   private _step(c: string): TokenInfo.JsonTokenInfo {
     switch (this._state) {
-      case VALUE_STATE.EMPTY:
+      case ValueState.EMPTY:
         if (isWhitespace(c, this._option.acceptJson5Whitespace)) {
           return {
             location: LOCATION_TABLE[this._location],
@@ -550,7 +601,7 @@ export class JsonStreamParser {
 
         // string
         if (c === '"' || (c === "'" && this._option.acceptSingleQuote)) {
-          this._state = VALUE_STATE.STRING;
+          this._state = ValueState.STRING;
           this._substate2 = c;
           return {
             location: LOCATION_TABLE[this._location],
@@ -570,7 +621,7 @@ export class JsonStreamParser {
         if (c === ":") {
           if (this._location === LocateState.KEY_END) {
             this._location = LocateState.VALUE_START;
-            this._state = VALUE_STATE.EMPTY;
+            this._state = ValueState.EMPTY;
             return {
               location: "object",
               type: "object",
@@ -594,7 +645,7 @@ export class JsonStreamParser {
             const oldLocation = this._location;
             this._stack.push(oldLocation);
             this._location = LocateState.ELEMENT_FIRST_START;
-            this._state = VALUE_STATE.EMPTY;
+            this._state = ValueState.EMPTY;
             return {
               location: LOCATION_NOT_KEY_TABLE[oldLocation],
               type: "array",
@@ -608,7 +659,7 @@ export class JsonStreamParser {
             const oldLocation = this._location;
             this._stack.push(oldLocation);
             this._location = LocateState.KEY_FIRST_START;
-            this._state = VALUE_STATE.EMPTY;
+            this._state = ValueState.EMPTY;
             return {
               location: LOCATION_NOT_KEY_TABLE[oldLocation],
               type: "array",
@@ -626,7 +677,7 @@ export class JsonStreamParser {
               this._throw("unexpected '+' sign");
           // fallthrough
           case "-":
-            this._state = VALUE_STATE.NUMBER;
+            this._state = ValueState.NUMBER;
             this._substate = -1;
             return {
               location: LOCATION_NOT_KEY_TABLE[this._location],
@@ -643,7 +694,7 @@ export class JsonStreamParser {
           case "7":
           case "8":
           case "9":
-            this._state = VALUE_STATE.NUMBER;
+            this._state = ValueState.NUMBER;
             this._substate = c === "0" ? 0 : 1;
             return {
               location: LOCATION_NOT_KEY_TABLE[this._location],
@@ -652,7 +703,7 @@ export class JsonStreamParser {
             };
           case ".":
             if (this._option.acceptEmptyInteger) {
-              this._state = VALUE_STATE.NUMBER_FRACTION;
+              this._state = ValueState.NUMBER_FRACTION;
               this._substate = false;
               return {
                 location: LOCATION_NOT_KEY_TABLE[this._location],
@@ -661,9 +712,31 @@ export class JsonStreamParser {
               };
             }
             this._throw("unexpected '.' before number");
+          case "N":
+            if (this._option.acceptNan) {
+              this._state = ValueState.NUMBER_NAN;
+              this._substate = 1;
+              return {
+                location: LOCATION_NOT_KEY_TABLE[this._location],
+                type: "number",
+                subtype: "nan",
+                index: 0,
+              };
+            }
+          case "I":
+            if (this._option.acceptInfinity) {
+              this._state = ValueState.NUMBER_INFINITY;
+              this._substate = 1;
+              return {
+                location: LOCATION_NOT_KEY_TABLE[this._location],
+                type: "number",
+                subtype: "infinity",
+                index: 0,
+              };
+            }
 
           case "n":
-            this._state = VALUE_STATE.NULL;
+            this._state = ValueState.NULL;
             this._substate = 1;
             return {
               location: LOCATION_NOT_KEY_TABLE[this._location],
@@ -671,7 +744,7 @@ export class JsonStreamParser {
               index: 0,
             };
           case "t":
-            this._state = VALUE_STATE.TRUE;
+            this._state = ValueState.TRUE;
             this._substate = 1;
             return {
               location: LOCATION_NOT_KEY_TABLE[this._location],
@@ -679,7 +752,7 @@ export class JsonStreamParser {
               index: 0,
             };
           case "f":
-            this._state = VALUE_STATE.FALSE;
+            this._state = ValueState.FALSE;
             this._substate = 1;
             return {
               location: LOCATION_NOT_KEY_TABLE[this._location],
@@ -691,79 +764,20 @@ export class JsonStreamParser {
         }
         this._throw(`unexpected ${formatChar(c)}`);
 
-      case VALUE_STATE.NULL: {
-        const dc = "null"[this._substate];
-        if (c === dc) {
-          if (++this._substate === 4) {
-            this._state = VALUE_STATE.EMPTY;
-            this._location = this._nextState(this._location);
-            return {
-              location: LOCATION_NOT_KEY_TABLE[this._location],
-              type: "null",
-              index: 3,
-              done: true,
-            };
-          }
-          return {
-            location: LOCATION_NOT_KEY_TABLE[this._location],
-            type: "null",
-            index: (this._substate - 1) as 1 | 2,
-          };
-        }
-        this._throw(
-          `expected '${dc}' while parsing "null", but got ${formatChar(c)}`
-        );
-      }
-      case VALUE_STATE.TRUE: {
-        const dc = "true"[this._substate];
-        if (c === dc) {
-          if (++this._substate === 4) {
-            this._state = VALUE_STATE.EMPTY;
-            this._location = this._nextState(this._location);
-            return {
-              location: LOCATION_NOT_KEY_TABLE[this._location],
-              type: "true",
-              index: 3,
-              done: true,
-            };
-          }
-          return {
-            location: LOCATION_NOT_KEY_TABLE[this._location],
-            type: "true",
-            index: (this._substate - 1) as 0 | 1 | 2,
-          };
-        }
-        this._throw(
-          `expected '${dc}' while parsing "true", but got ${formatChar(c)}`
-        );
-      }
-      case VALUE_STATE.FALSE: {
-        const dc = "false"[this._substate];
-        if (c === dc) {
-          if (++this._substate === 5) {
-            this._state = VALUE_STATE.EMPTY;
-            this._location = this._nextState(this._location);
-            return {
-              location: LOCATION_NOT_KEY_TABLE[this._location],
-              type: "false",
-              index: 4,
-              done: true,
-            };
-          }
-          return {
-            location: LOCATION_NOT_KEY_TABLE[this._location],
-            type: "false",
-            index: (this._substate - 1) as 0 | 1 | 2 | 3,
-          };
-        }
-        this._throw(
-          `expected '${dc}' while parsing "false", but got ${formatChar(c)}`
-        );
-      }
+      case ValueState.NULL:
+        return this._handleLiteral(c, "null", ValueState.EMPTY);
+      case ValueState.TRUE:
+        return this._handleLiteral(c, "true", ValueState.EMPTY);
+      case ValueState.FALSE:
+        return this._handleLiteral(c, "false", ValueState.EMPTY);
+      case ValueState.NUMBER_INFINITY:
+        return this._handleLiteral(c, "Infinity", ValueState.EMPTY);
+      case ValueState.NUMBER_NAN:
+        return this._handleLiteral(c, "NaN", ValueState.EMPTY);
 
-      case VALUE_STATE.STRING_MULTILINE_CR:
+      case ValueState.STRING_MULTILINE_CR:
         if (c === "\n") {
-          this._state = VALUE_STATE.STRING;
+          this._state = ValueState.STRING;
           return {
             location: LOCATION_TABLE[this._location],
             type: "string",
@@ -771,11 +785,11 @@ export class JsonStreamParser {
           };
         }
       // fallthrough
-      case VALUE_STATE.STRING:
+      case ValueState.STRING:
         if (c === this._substate2) {
           const oldLocation = this._location;
           this._location = this._nextState(oldLocation);
-          this._state = VALUE_STATE.EMPTY;
+          this._state = ValueState.EMPTY;
           return {
             location: LOCATION_TABLE[oldLocation],
             type: "string",
@@ -783,27 +797,24 @@ export class JsonStreamParser {
           };
         }
         if (c === "\\") {
-          this._state = VALUE_STATE.STRING_ESCAPE;
+          this._state = ValueState.STRING_ESCAPE;
           return {
             location: LOCATION_TABLE[this._location],
             type: "string",
             subtype: "escape_start",
           };
         }
-        if (c === EOF) {
-          this._throw("unexpected EOF while parsing string");
-        }
-        if (isControl(c)) {
+        if (c === EOF) this._throw("unexpected EOF while parsing string");
+        if (isControl(c))
           this._throw(`unexpected control character ${formatChar(c)}`);
-        }
         return {
           location: LOCATION_TABLE[this._location],
           type: "string",
           subtype: "normal",
         };
-      case VALUE_STATE.STRING_ESCAPE:
+      case ValueState.STRING_ESCAPE:
         if (c === "u") {
-          this._state = VALUE_STATE.STRING_UNICODE;
+          this._state = ValueState.STRING_UNICODE;
           this._substate = "";
           return {
             location: LOCATION_TABLE[this._location],
@@ -813,7 +824,7 @@ export class JsonStreamParser {
         }
         const dc = ESCAPE_TABLE[c];
         if (dc !== undefined) {
-          this._state = VALUE_STATE.STRING;
+          this._state = ValueState.STRING;
           return {
             location: LOCATION_TABLE[this._location],
             type: "string",
@@ -823,7 +834,7 @@ export class JsonStreamParser {
         }
         if (this._option.acceptMultilineString && isNextLine(c)) {
           this._state =
-            c === "\r" ? VALUE_STATE.STRING_MULTILINE_CR : VALUE_STATE.STRING;
+            c === "\r" ? ValueState.STRING_MULTILINE_CR : ValueState.STRING;
           return {
             location: LOCATION_TABLE[this._location],
             type: "string",
@@ -831,18 +842,17 @@ export class JsonStreamParser {
           };
         }
         if (this._option.accpetJson5StringEscape) {
-          const dc =
-            c === "v" ? "\v" : c === "0" ? "\0" : c === "'" ? "'" : undefined;
+          const dc = ESCAPE_TABLE2[c];
           if (dc !== undefined) {
-            this._state = VALUE_STATE.STRING;
+            this._state = ValueState.STRING;
             return {
               location: LOCATION_TABLE[this._location],
               type: "string",
               subtype: "escape",
-              escaped_value: dc,
+              escaped_value: dc as any,
             };
           } else if (c === "x") {
-            this._state = VALUE_STATE.STRING_ESCAPE_HEX;
+            this._state = ValueState.STRING_ESCAPE_HEX;
             this._substate = "";
             return {
               location: LOCATION_TABLE[this._location],
@@ -852,7 +862,7 @@ export class JsonStreamParser {
           }
         }
         this._throw(`bad escaped character ${formatChar(c)}`);
-      case VALUE_STATE.STRING_UNICODE:
+      case ValueState.STRING_UNICODE:
         if (
           (c >= "0" && c <= "9") ||
           (c >= "a" && c <= "f") ||
@@ -860,7 +870,7 @@ export class JsonStreamParser {
         ) {
           this._substate += c;
           if (this._substate.length === 4) {
-            this._state = VALUE_STATE.STRING;
+            this._state = ValueState.STRING;
             return {
               location: LOCATION_TABLE[this._location],
               type: "string",
@@ -877,7 +887,7 @@ export class JsonStreamParser {
           };
         }
         this._throw(`bad Unicode escape character ${formatChar(c)}`);
-      case VALUE_STATE.STRING_ESCAPE_HEX:
+      case ValueState.STRING_ESCAPE_HEX:
         if (
           (c >= "0" && c <= "9") ||
           (c >= "a" && c <= "f") ||
@@ -885,7 +895,7 @@ export class JsonStreamParser {
         ) {
           this._substate += c;
           if (this._substate.length === 2) {
-            this._state = VALUE_STATE.STRING;
+            this._state = ValueState.STRING;
             return {
               location: LOCATION_TABLE[this._location],
               type: "string",
@@ -903,7 +913,7 @@ export class JsonStreamParser {
         }
         this._throw(`bad Hex escape character ${formatChar(c)}`);
 
-      case VALUE_STATE.NUMBER:
+      case ValueState.NUMBER:
         if (c === "0") {
           if (this._substate === 0) this._throw("leading zero not allowed");
           if (this._substate === -1) this._substate = 0;
@@ -926,7 +936,7 @@ export class JsonStreamParser {
           if (this._substate === -1 && !this._option.acceptEmptyInteger) {
             this._throw("unexpected '.' before number");
           }
-          this._state = VALUE_STATE.NUMBER_FRACTION;
+          this._state = ValueState.NUMBER_FRACTION;
           this._substate = false;
           return {
             location: LOCATION_NOT_KEY_TABLE[this._location],
@@ -935,12 +945,23 @@ export class JsonStreamParser {
           };
         }
         if (c === "e" || c === "E") {
-          this._state = VALUE_STATE.NUMBER_EXPONENT;
+          this._state = ValueState.NUMBER_EXPONENT;
           this._substate = 0;
           return {
             location: LOCATION_NOT_KEY_TABLE[this._location],
             type: "number",
             subtype: "exponent_start",
+          };
+        }
+        if (this._option.acceptInfinity && c === "I") {
+          // "-Infinity"
+          this._state = ValueState.NUMBER_INFINITY;
+          this._substate = 1;
+          return {
+            location: LOCATION_NOT_KEY_TABLE[this._location],
+            type: "number",
+            subtype: "infinity",
+            index: 0,
           };
         }
         if (isNumberSeparator(c, this._option.acceptJson5Whitespace))
@@ -950,7 +971,7 @@ export class JsonStreamParser {
             c
           )} while parsing the integer part of the number`
         );
-      case VALUE_STATE.NUMBER_FRACTION:
+      case ValueState.NUMBER_FRACTION:
         if (c >= "0" && c <= "9") {
           this._substate = true;
           return {
@@ -964,7 +985,7 @@ export class JsonStreamParser {
         }
 
         if (c === "e" || c === "E") {
-          this._state = VALUE_STATE.NUMBER_EXPONENT;
+          this._state = ValueState.NUMBER_EXPONENT;
           this._substate = 0;
           return {
             location: LOCATION_NOT_KEY_TABLE[this._location],
@@ -979,7 +1000,7 @@ export class JsonStreamParser {
             c
           )} while parsing the fraction part of the number`
         );
-      case VALUE_STATE.NUMBER_EXPONENT:
+      case ValueState.NUMBER_EXPONENT:
         if (c === "+" || c === "-") {
           if (this._substate === 0) {
             this._substate = 1;

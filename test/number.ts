@@ -65,3 +65,37 @@ combineCall(
         }
   }
 );
+{
+  const str = "Infinity";
+  for (let i = 1; i <= 8; ++i) {
+    checkError(str.slice(0, i), true);
+    checkError("-" + str.slice(0, i), true);
+    checkError("+" + str.slice(0, i), true);
+
+    checkError(str.slice(0, i), i !== 8, { acceptInfinity: true });
+    checkError("-" + str.slice(0, i), i !== 8, { acceptInfinity: true });
+    checkError("+" + str.slice(0, i), true, { acceptInfinity: true });
+
+    checkError("+" + str.slice(0, i), i !== 8, {
+      acceptInfinity: true,
+      acceptPositiveSign: true,
+    });
+  }
+}
+{
+  const str = "NaN";
+  for (let i = 1; i <= 3; ++i) {
+    checkError(str.slice(0, i), true);
+    checkError("-" + str.slice(0, i), true);
+    checkError("+" + str.slice(0, i), true);
+
+    checkError(str.slice(0, i), i !== 3, { acceptNan: true });
+    checkError("-" + str.slice(0, i), true, { acceptNan: true });
+    checkError("+" + str.slice(0, i), true, { acceptNan: true });
+
+    checkError("+" + str.slice(0, i), true, {
+      acceptNan: true,
+      acceptPositiveSign: true,
+    });
+  }
+}
