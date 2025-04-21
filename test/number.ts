@@ -1,40 +1,25 @@
-import { checkError, combineCall, runTestCases } from "./util";
+import {
+  checkError,
+  combineCall,
+  makeRejectedTestcases,
+  runTestCases,
+} from "./util";
 
 const testcases: (string | [string])[] = [
   ["1"],
-  "+1",
   ["-1"],
 
   ["10"],
-  "+10",
   ["-10"],
 
   ["0"],
-  "+0",
   ["-0"],
 
   "00",
-  "+00",
   "-00",
 
   "-01",
   "01",
-
-  ["0.0"],
-  "+0.0",
-  ["-0.0"],
-
-  ["0.1"],
-  "+0.1",
-  ["-0.1"],
-
-  ["1.0"],
-  "+1.0",
-  ["-1.0"],
-
-  ["1.00"],
-  "+1.00",
-  ["-1.00"],
 
   "0x1",
   "0x0",
@@ -45,25 +30,38 @@ const testcases: (string | [string])[] = [
 ];
 runTestCases(testcases);
 
+{
+  const testcases: (string | [string])[] = [["+10"], ["+0"], "+00"];
+  runTestCases(testcases, { acceptPositiveSign: true });
+  runTestCases(makeRejectedTestcases(testcases));
+}
+
 combineCall(
   [
-    ["-", ""],
+    ["-", "+", ""],
     ["0", "1", ""],
-    ["0", "1", "00", "01", "1"],
+    ["0", "1", "00", "01", "1", ""],
     ["e", "e+", "e-", "E", "E+", "E-"],
     ["1", "01", "10", "0", "00", "a", "z", ""],
   ],
   (choice) => {
     const s = `${choice.slice(0, 2).join("")}.${choice.slice(2, 5).join("")}`;
-    checkError(
-      s,
-      !(
-        choice[1] &&
-        choice[2] &&
-        choice[4] &&
-        choice[4] != "a" &&
-        choice[4] != "z"
-      )
-    );
+    for (const acceptPositiveSign of [true, false])
+      for (const acceptEmptyInteger of [true, false])
+        for (const acceptEmptyFraction of [true, false]) {
+          let right = !(
+            choice[4] === "a" ||
+            choice[4] === "z" ||
+            choice[4] === ""
+          );
+          if (!acceptPositiveSign && choice[0] == "+") right &&= false;
+          if (!acceptEmptyInteger && choice[1] == "") right &&= false;
+          if (!acceptEmptyFraction && choice[2] == "") right &&= false;
+          checkError(s, !right, {
+            acceptPositiveSign,
+            acceptEmptyFraction,
+            acceptEmptyInteger,
+          });
+        }
   }
 );

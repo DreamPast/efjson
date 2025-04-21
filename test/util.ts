@@ -1,9 +1,13 @@
-import { JsonStreamParserError, jsonStreamParse } from "../efjson";
+import { JsonOption, JsonStreamParserError, jsonStreamParse } from "../efjson";
 
-export const checkError = (s: string, expected_error = true) => {
+export const checkError = (
+  s: string,
+  expected_error = true,
+  option?: JsonOption
+) => {
   try {
     try {
-      jsonStreamParse(s);
+      jsonStreamParse(s, option);
     } catch (e) {
       if (!(e instanceof JsonStreamParserError)) throw "wrong error";
       if (expected_error) {
@@ -14,13 +18,20 @@ export const checkError = (s: string, expected_error = true) => {
     else return undefined;
   } catch (e) {
     console.log(s);
+    console.log(option)
     throw e;
   }
 };
-export const runTestCases = (testcases: (string | [string])[]) => {
+export const runTestCases = (
+  testcases: (string | [string])[],
+  option?: JsonOption
+) => {
   for (const test of testcases)
-    if (typeof test == "string") checkError(test);
-    else checkError(test[0], false);
+    if (typeof test == "string") checkError(test, true, option);
+    else checkError(test[0], false, option);
+};
+export const makeRejectedTestcases = (testcases: (string | [string])[]) => {
+  return testcases.map((x) => (Array.isArray(x) ? x[0] : x));
 };
 
 export const combine = <T>(choices: T[][]) => {

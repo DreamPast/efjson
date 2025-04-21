@@ -128,87 +128,115 @@ export type JsonOption = {
   /**
    * whether to accept whitespace in JSON5
    */
-  ACCEPT_JSON5_WHITESPACE?: boolean;
+  acceptJson5Whitespace?: boolean;
 
   // << array >>
   /**
    * whether to accept a single trailing comma in array
    * @example '[1,]', '[,]'
    */
-  ACCEPT_TRAILING_COMMA_IN_ARRAY?: boolean;
+  acceptTrailingCommaInArray?: boolean;
 
   // << object >>
   /**
    * whether to accept a single trailing comma in object
    * @example '{"a":1,}', '{,}'
    */
-  ACCEPT_TRAILING_COMMA_IN_OBJECT?: boolean;
+  acceptTrailingCommaInObject?: boolean;
   /**
    * whether to accept identifier key in object
    * @example '{a:1}'
    */
-  // ACCEPT_IDENTIFIER_KEY_IN_OBJECT?: boolean;
+  // acceptIdentifierKey?: boolean;
 
   // << string >>
   /**
    * whether to accept single quote in string
    * @example "'a'"
    */
-  ACCEPT_SINGLE_QUOTE?: boolean;
+  acceptSingleQuote?: boolean;
   /**
    * whether to accept multi-line string
    * @example '"a\\\nb"'
    */
-  ACCEPT_MULTILINE_STRING?: boolean;
+  acceptMultilineString?: boolean;
   /**
    * whether to accept JSON5 string escape
    * @example '"\\x01"', '\\v', '\\0'
    */
-  ACCEPT_JSON5_STRING_ESCAPE?: boolean;
+  accpetJson5StringEscape?: boolean;
 
   // << number >>
   /**
    * whether to accept positive sign in number
    * @example '+1', '+0'
    */
-  ACCEPT_POSITIVE_SIGN?: boolean;
+  acceptPositiveSign?: boolean;
   /**
    * whether to accept empty fraction in number
    * @example '1.', '0.'
    */
-  ACCEPT_EMPTY_FRACTION?: boolean;
+  acceptEmptyFraction?: boolean;
   /**
    * whether to accept empty integer in number
    * @example '.1', '.0'
    */
-  ACCEPT_EMPTY_INTEGER?: boolean;
+  acceptEmptyInteger?: boolean;
   /**
    * whether to accept NaN
    */
-  // ACCEPT_NAN?: boolean;
+  // acceptNan?: boolean;
   /**
    * whether to accept Infinity
    */
-  // ACCEPT_INFINITY?: boolean;
+  // acceptInfinity?: boolean;
   /**
    * whether to accept hexadecimal integer
    * @example '0x1', '0x0'
    */
-  // ACCEPT_HEXADECIMAL_INTEGER?: boolean;
+  // acceptHexadecimalInteger?: boolean;
   /**
    * whether to accept octal integer
    * @example '0o1', '0o0'
    */
-  // ACCEPT_OCTAL_INTEGER?: boolean;
+  // acceptOctalInteger?: boolean;
   /**
    * whether to accept binary integer
    * @example '0b1', '0b0'
    */
-  // ACCEPT_BINARY_INTEGER?: boolean;
+  // acceptBinaryInteger?: boolean;
 
   // << comment >>
-  // ACCEPT_SINGLELINE_COMMENT?: boolean;
-  // ACCEPT_MULTILINE_COMMENT?: boolean;
+  // acceptSingleLineComment?: boolean;
+  // accpetMultiLineComment?: boolean;
+};
+const JSON5_OPTION: JsonOption = {
+  // << white space >>
+  acceptJson5Whitespace: true,
+
+  // << array >>
+  acceptTrailingCommaInArray: true,
+
+  // << object >>
+  acceptTrailingCommaInObject: true,
+  // acceptIdentifierKey: true,
+
+  // << string >>
+  acceptSingleQuote: true,
+  acceptMultilineString: true,
+  accpetJson5StringEscape: true,
+
+  // << number >>
+  acceptPositiveSign: true,
+  acceptEmptyFraction: true,
+  acceptEmptyInteger: true,
+  // acceptNan: true,
+  // acceptInfinity: true,
+  // acceptHexadecimalInteger: true,
+
+  // << comment >>
+  // acceptSingleLineComment: true,
+  // accpetMultiLineComment: true,
 };
 
 namespace TokenInfo {
@@ -242,7 +270,7 @@ namespace TokenInfo {
   };
   /* JSON5 */
   type _StringJson5Escape = { subtype: "escape" } & {
-    escaped_value: "\v" | "\0";
+    escaped_value: "\v" | "\0" | "'";
   };
   type _StringUnicode = { subtype: "unicode" } & (
     | { index: 0 | 1 | 2; escaped_value?: undefined }
@@ -433,7 +461,7 @@ export class JsonStreamParser {
       this._location === LocateState.ELEMENT_FIRST_START ||
       this._location === LocateState.ELEMENT_END ||
       (this._location === LocateState.ELEMENT_START &&
-        this._option.ACCEPT_TRAILING_COMMA_IN_ARRAY)
+        this._option.acceptTrailingCommaInArray)
     ) {
       this._state = VALUE_STATE.EMPTY;
       this._location = this._nextState(this._stack.pop()!);
@@ -454,7 +482,7 @@ export class JsonStreamParser {
       this._location === LocateState.KEY_FIRST_START ||
       this._location === LocateState.VALUE_END ||
       (this._location === LocateState.KEY_START &&
-        this._option.ACCEPT_TRAILING_COMMA_IN_OBJECT)
+        this._option.acceptTrailingCommaInObject)
     ) {
       this._state = VALUE_STATE.EMPTY;
       this._location = this._nextState(this._stack.pop()!);
@@ -507,7 +535,7 @@ export class JsonStreamParser {
   private _step(c: string): TokenInfo.JsonTokenInfo {
     switch (this._state) {
       case VALUE_STATE.EMPTY:
-        if (isWhitespace(c, this._option.ACCEPT_JSON5_WHITESPACE)) {
+        if (isWhitespace(c, this._option.acceptJson5Whitespace)) {
           return {
             location: LOCATION_TABLE[this._location],
             type: "whitespace",
@@ -521,7 +549,7 @@ export class JsonStreamParser {
         }
 
         // string
-        if (c === '"' || (c === "'" && this._option.ACCEPT_SINGLE_QUOTE)) {
+        if (c === '"' || (c === "'" && this._option.acceptSingleQuote)) {
           this._state = VALUE_STATE.STRING;
           this._substate2 = c;
           return {
@@ -594,7 +622,7 @@ export class JsonStreamParser {
             return this._handleComma();
 
           case "+":
-            if (!this._option.ACCEPT_POSITIVE_SIGN)
+            if (!this._option.acceptPositiveSign)
               this._throw("unexpected '+' sign");
           // fallthrough
           case "-":
@@ -623,7 +651,7 @@ export class JsonStreamParser {
               subtype: "integer_digit",
             };
           case ".":
-            if (this._option.ACCEPT_EMPTY_INTEGER) {
+            if (this._option.acceptEmptyInteger) {
               this._state = VALUE_STATE.NUMBER_FRACTION;
               this._substate = false;
               return {
@@ -793,7 +821,7 @@ export class JsonStreamParser {
             escaped_value: dc as any,
           };
         }
-        if (this._option.ACCEPT_MULTILINE_STRING && isNextLine(c)) {
+        if (this._option.acceptMultilineString && isNextLine(c)) {
           this._state =
             c === "\r" ? VALUE_STATE.STRING_MULTILINE_CR : VALUE_STATE.STRING;
           return {
@@ -802,9 +830,11 @@ export class JsonStreamParser {
             subtype: "next_line",
           };
         }
-        if (this._option.ACCEPT_JSON5_STRING_ESCAPE) {
-          const dc = c === "v" ? "\v" : c === "0" ? "\0" : undefined;
+        if (this._option.accpetJson5StringEscape) {
+          const dc =
+            c === "v" ? "\v" : c === "0" ? "\0" : c === "'" ? "'" : undefined;
           if (dc !== undefined) {
+            this._state = VALUE_STATE.STRING;
             return {
               location: LOCATION_TABLE[this._location],
               type: "string",
@@ -812,7 +842,8 @@ export class JsonStreamParser {
               escaped_value: dc,
             };
           } else if (c === "x") {
-            this._substate += c;
+            this._state = VALUE_STATE.STRING_ESCAPE_HEX;
+            this._substate = "";
             return {
               location: LOCATION_TABLE[this._location],
               type: "string",
@@ -892,7 +923,7 @@ export class JsonStreamParser {
           };
         }
         if (c === ".") {
-          if (this._substate === -1) {
+          if (this._substate === -1 && !this._option.acceptEmptyInteger) {
             this._throw("unexpected '.' before number");
           }
           this._state = VALUE_STATE.NUMBER_FRACTION;
@@ -912,7 +943,7 @@ export class JsonStreamParser {
             subtype: "exponent_start",
           };
         }
-        if (isNumberSeparator(c, this._option.ACCEPT_JSON5_WHITESPACE))
+        if (isNumberSeparator(c, this._option.acceptJson5Whitespace))
           return this._handleNumberSeparator(c);
         this._throw(
           `unexpected character ${formatChar(
@@ -928,7 +959,7 @@ export class JsonStreamParser {
             subtype: "fraction_digit",
           };
         }
-        if (this._substate === false && !this._option.ACCEPT_EMPTY_FRACTION) {
+        if (this._substate === false && !this._option.acceptEmptyFraction) {
           this._throw("the fraction part cannot be empty");
         }
 
@@ -941,7 +972,7 @@ export class JsonStreamParser {
             subtype: "exponent_start",
           };
         }
-        if (isNumberSeparator(c, this._option.ACCEPT_JSON5_WHITESPACE))
+        if (isNumberSeparator(c, this._option.acceptJson5Whitespace))
           return this._handleNumberSeparator(c);
         this._throw(
           `unexpected character ${formatChar(
@@ -975,7 +1006,7 @@ export class JsonStreamParser {
           this._throw("the exponent part cannot be empty");
         }
 
-        if (isNumberSeparator(c, this._option.ACCEPT_JSON5_WHITESPACE))
+        if (isNumberSeparator(c, this._option.acceptJson5Whitespace))
           return this._handleNumberSeparator(c);
         this._throw(
           `unexpected character ${formatChar(
@@ -1036,14 +1067,14 @@ export class JsonStreamParser {
   }
 }
 
-export function jsonStreamParse(s: string) {
-  const parser = new JsonStreamParser();
+export function jsonStreamParse(s: string, option?: JsonOption) {
+  const parser = new JsonStreamParser(option);
   const ret = parser.feed(s);
   parser.end();
   return ret;
 }
-export function* jsonStreamGenerator(s: Iterable<string>) {
-  const parser = new JsonStreamParser();
+export function* jsonStreamGenerator(s: Iterable<string>, option?: JsonOption) {
+  const parser = new JsonStreamParser(option);
   for (const chunk of s) yield* parser.feed(chunk);
   yield parser.end();
 }
