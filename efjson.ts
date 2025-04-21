@@ -329,10 +329,10 @@ export class JsonStreamParserError extends JsonParserError {
 }
 
 export class JsonStreamParser {
-  _position = 0;
-  _line = 1;
-  _column = 1;
-  _meetCr = false;
+  private _position = 0;
+  private _line = 1;
+  private _column = 1;
+  private _meetCr = false;
 
   option: JsonOption;
 
@@ -342,7 +342,7 @@ export class JsonStreamParser {
    * - at the start/end of an object's key or value
    * - at the start/end of an array's element
    */
-  _location = LOCATE_STATE.ROOT_START;
+  private _location = LOCATE_STATE.ROOT_START;
   /**
    * The state of the value
    * - parse empty
@@ -350,7 +350,7 @@ export class JsonStreamParser {
    * - parse boolean
    * - parse string
    */
-  _state = VALUE_STATE.EMPTY;
+  private _state = VALUE_STATE.EMPTY;
   /**
    * primary value substate (see following)
    *
@@ -369,17 +369,17 @@ export class JsonStreamParser {
    *
    *   `NULL`/`TRUE`/`FALSE`: [number] current index of string
    */
-  _substate: any;
+  private _substate: any;
 
-  _stack: LOCATE_STATE[] = [];
+  private _stack: LOCATE_STATE[] = [];
 
-  _throw(msg?: string): never {
+  private _throw(msg?: string): never {
     throw new JsonStreamParserError(
       `JsonParser Error at (${this._position})${this._line}:${this._column} - ${msg}`
     );
   }
 
-  _nextState(stat: LOCATE_STATE) {
+  private _nextState(stat: LOCATE_STATE) {
     switch (stat) {
       case LOCATE_STATE.ROOT_START:
         return LOCATE_STATE.ROOT_END;
@@ -398,7 +398,7 @@ export class JsonStreamParser {
         this._throw("unexpected end");
     }
   }
-  _handleComma(): JsonToken {
+  private _handleComma(): JsonToken {
     if (this._location === LOCATE_STATE.VALUE_END) {
       this._location = LOCATE_STATE.KEY_START;
       return { location: "object", type: "object", subtype: "next" };
@@ -414,7 +414,7 @@ export class JsonStreamParser {
       this._throw("unpexted empty value");
     this._throw("unexpected comma");
   }
-  _handleArrayEnd(): JsonToken {
+  private _handleArrayEnd(): JsonToken {
     if (
       this._location === LOCATE_STATE.ELEMENT_FIRST_START ||
       this._location === LOCATE_STATE.ELEMENT_END ||
@@ -435,7 +435,7 @@ export class JsonStreamParser {
     }
     this._throw("bad closing bracket");
   }
-  _handleObjectEnd(): JsonToken {
+  private _handleObjectEnd(): JsonToken {
     if (
       this._location === LOCATE_STATE.KEY_FIRST_START ||
       this._location === LOCATE_STATE.VALUE_END ||
@@ -456,7 +456,7 @@ export class JsonStreamParser {
     }
     this._throw("bad closing curly brace");
   }
-  _handleEOF(): JsonToken {
+  private _handleEOF(): JsonToken {
     switch (this._location) {
       case LOCATE_STATE.ROOT_START:
       case LOCATE_STATE.ROOT_END:
@@ -475,7 +475,7 @@ export class JsonStreamParser {
     }
     this._throw("unexpected EOF");
   }
-  _handleNumberSeparator(c: string): JsonToken {
+  private _handleNumberSeparator(c: string): JsonToken {
     if (this._substate === -1)
       this._throw("a number cannot consist of only a negative sign");
     this._state = VALUE_STATE.EMPTY;
@@ -490,7 +490,7 @@ export class JsonStreamParser {
     };
   }
 
-  _step(c: string): JsonToken {
+  private _step(c: string): JsonToken {
     switch (this._state) {
       case VALUE_STATE.EMPTY:
         if (isWhitespace(c, this.option.ACCEPT_JSON5_WHITESPACE)) {
@@ -909,7 +909,7 @@ export class JsonStreamParser {
         );
     }
   }
-  _switchLine(c: string) {
+  private _switchLine(c: string) {
     if (this._meetCr) {
       if (c !== "\n") {
         ++this._line;
@@ -918,7 +918,7 @@ export class JsonStreamParser {
       this._meetCr = false;
     }
   }
-  _feed(c: string) {
+  private _feed(c: string) {
     this._switchLine(c);
     const ret = this._step(c);
     ++this._position;
