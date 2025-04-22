@@ -1484,10 +1484,7 @@ export type JsonEventObjectReceiver = {
 
   keyReceiver?: JsonEventStringReceiver;
   subscribeDict?: { [key: string]: JsonEventReceiver };
-  subscribeList?: {
-    validator: (key: string) => boolean;
-    valueReceiver: JsonEventReceiver;
-  }[];
+  subscribeList?: ((key: string) => JsonEventReceiver | undefined)[];
 
   start?: () => void;
   end?: () => void;
@@ -1498,12 +1495,9 @@ export type JsonEventArrayReceiver = {
   type: "array";
 
   set?: (index: number, value: JsonValue) => void;
-  next?: () => void;
+  next?: (new_index: number) => void;
 
-  subscribeList?: {
-    validator: (index: number) => boolean;
-    valueReceiver: JsonEventReceiver;
-  }[];
+  subscribeList?: ((index: number) => JsonEventReceiver | undefined)[];
 
   start?: () => void;
   end?: () => void;
@@ -1631,7 +1625,6 @@ export class JsonEventEmiiter {
     }
     state._receiver.feed?.(token);
     state._list.push(token.character);
-    return;
   }
   private _feedString(token: JsonToken & { type: "string" }) {
     const state = this._state[this._state.length - 1] as EventState._String;
@@ -1771,11 +1764,10 @@ export class JsonEventEmiiter {
         receiver === undefined &&
         state._receiver.subscribeList !== undefined
       ) {
-        for (const item of state._receiver.subscribeList)
-          if (item.validator(state._key!)) {
-            receiver = item.valueReceiver;
-            break;
-          }
+        for (const func of state._receiver.subscribeList) {
+          receiver = func(state._key!);
+          if (receiver !== undefined) break;
+        }
       }
       this._state.push({
         _type: undefined,
@@ -1801,17 +1793,15 @@ export class JsonEventEmiiter {
         state._receiver.start?.();
         state._receiver.feed?.(token);
 
-        let receiver: JsonEventReceiver = { type: "any" };
+        let receiver: JsonEventReceiver | undefined;
         if (state._receiver.subscribeList !== undefined)
-          for (const item of state._receiver.subscribeList) {
-            if (item.validator(state._index)) {
-              receiver = item.valueReceiver;
-              break;
-            }
+          for (const func of state._receiver.subscribeList) {
+            receiver = func(state._index);
+            if (receiver === undefined) break;
           }
         this._state.push({
           _type: undefined,
-          _receiver: receiver,
+          _receiver: receiver ?? { type: "any" },
         });
         return;
       }
@@ -1819,29 +1809,30 @@ export class JsonEventEmiiter {
     state._receiver.feed?.(token);
     if (token.subtype === "start") return;
     if (token.subtype === "end") {
-      if (state._save && state._child !== undefined)
-        state._array[state._index] = state._child!; // trailling comment
+      if (state._child !== undefined) {
+        if (state._save) state._array[state._index] = state._child!; // trailing comma
+        state._receiver.set?.(state._index, state._child!);
+      }
       state._receiver.save?.(state._array);
       return this._endValue(state._array);
     }
 
     // next element
+    state._receiver.next?.(state._index + 1);
     if (state._save) state._array[state._index] = state._child!;
-    state._child = undefined;
     state._receiver.set?.(state._index, state._child!);
+    state._child = undefined;
     ++state._index;
 
-    let receiver: JsonEventReceiver = { type: "any" };
+    let receiver: JsonEventReceiver | undefined = undefined;
     if (state._receiver.subscribeList !== undefined)
-      for (const item of state._receiver.subscribeList) {
-        if (item.validator(state._index)) {
-          receiver = item.valueReceiver;
-          break;
-        }
+      for (const func of state._receiver.subscribeList) {
+        receiver = func(state._index);
+        if (receiver !== undefined) break;
       }
     this._state.push({
       _type: undefined,
-      _receiver: receiver,
+      _receiver: receiver ?? { type: "any" },
     });
     return;
   }
