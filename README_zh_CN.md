@@ -12,7 +12,17 @@
 
 ## 安装
 
-拷贝`efjson.ts`到项目中。
+### 通过[npm](https://npmjs.org/)安装
+
+```sh
+npm install efjson
+```
+
+### 直接使用源代码
+
+拷贝`efjson.ts`到你的项目中。
+
+如果你需要最小构建，dist文件夹中亦提供`efjson.min.cjs`和`efjson.min.mjs`（部分私有变量被重命名以便于压缩）。
 
 ## 例子
 

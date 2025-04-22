@@ -1,0 +1,7 @@
+!dist/*
+.vscode/*
+
+doc/*
+example/*
+test/*
+efjson.ts

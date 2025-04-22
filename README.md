@@ -12,7 +12,17 @@ The state diagram for stream parsing JSON can be found in [The Diagram of JSON T
 
 ## Installation
 
-Just copy `efjson.ts` into your project.
+### Installation via [npm](https://npmjs.org/)
+
+```sh
+npm install efjson
+```
+
+### Using Source Code Directly
+
+Copy `efjson.ts` into your project.
+
+If you need a minimal build, the `dist` folder also provides `efjson.min.cjs` and `efjson.min.mjs` (some private variables are renamed for better compression).
 
 ## Example
 

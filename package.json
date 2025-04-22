@@ -1,8 +1,9 @@
 {
   "name": "efjson",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "a streaming and event-driven JSON parser (with support for JSON5 and JSONC)",
-  "main": "efjson.ts",
+  "main": "dist/efjson.js",
+  "types": "dist/efjson.d.ts",
   "keywords": [
     "json",
     "streaming",
@@ -13,12 +14,21 @@
   "author": "Jin Cai",
   "license": "MIT",
   "scripts": {
-    "build_cjs": "tsc efjson.ts --target es6 --module commonjs --outDir dist && uglifyjs -c -m --mangle-props regex=/^_/ --output dist/efjson.min.cjs dist/efjson.js --wrap efjson",
-    "build_mjs": "tsc efjson.ts --target es6 --outDir dist && uglifyjs -c -m --mangle-props regex=/^_/ --output dist/efjson.min.mjs dist/efjson.js --module",
-    "compress": "uglifyjs -c -m --output efjson.min.js efjson.js"
+    "build": "tsc",
+    "gen_cjs": "uglifyjs -c -m --mangle-props regex=/^_/ --output dist/efjson.min.cjs dist/efjson.js --wrap efjson",
+    "gen_mjs": "uglifyjs -c -m --mangle-props regex=/^_/ --output dist/efjson.min.mjs dist/efjson.js --module",
+    "build_cjs": "tsc && npm run gen_cjs",
+    "build_mjs": "tsc --module es6 && npm run gen_mjs",
+    "compress": "uglifyjs -c -m --output efjson.min.js efjson.js",
+    "prepare": "npm run build_mjs && npm run build_cjs"
   },
   "devDependencies": {
     "typescript": "^5.8.3",
     "uglify-js": "^3.19.3"
+  },
+  "homepage": "https://github.com/DreamPast/efjson#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DreamPast/efjson.git"
   }
 }
