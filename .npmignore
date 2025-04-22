@@ -5,3 +5,5 @@ doc/*
 example/*
 test/*
 efjson.ts
+
+*.tgz

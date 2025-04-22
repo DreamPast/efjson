@@ -1521,54 +1521,54 @@ export type JsonEventReceiver =
 
 namespace EventState {
   export type _Unknown = {
-    type?: undefined;
-    receiver: JsonEventReceiver;
-    save?: undefined;
+    _type?: undefined;
+    _receiver: JsonEventReceiver;
+    _save?: undefined;
   };
   export type _StateLess = {
-    type: "null" | "true" | "false";
-    receiver: JsonEventReceiver;
-    save?: undefined;
+    _type: "null" | "true" | "false";
+    _receiver: JsonEventReceiver;
+    _save?: undefined;
   };
   export type _Number = {
-    type: "number";
-    receiver: JsonEventNumberReceiver;
+    _type: "number";
+    _receiver: JsonEventNumberReceiver;
 
-    save?: boolean;
-    list: string[];
+    _save?: boolean;
+    _list: string[];
   };
   export type _String = {
-    type: "string";
-    receiver: JsonEventStringReceiver;
+    _type: "string";
+    _receiver: JsonEventStringReceiver;
 
-    save?: boolean;
-    list: string[];
-    isIdentifier?: boolean;
+    _save?: boolean;
+    _list: string[];
+    _isIdentifier?: boolean;
   };
 
   export type _Object = {
-    type: "object";
-    receiver: JsonEventObjectReceiver;
+    _type: "object";
+    _receiver: JsonEventObjectReceiver;
 
-    saveChild: boolean;
-    child?: JsonValue;
-    key?: string;
+    _saveChild: boolean;
+    _child?: JsonValue;
+    _key?: string;
 
-    save: boolean;
-    saveKey: boolean;
-    saveValue: boolean;
-    object: JsonObject;
+    _save: boolean;
+    _saveKey: boolean;
+    _saveValue: boolean;
+    _object: JsonObject;
   };
   export type _Array = {
-    type: "array";
-    receiver: JsonEventArrayReceiver;
+    _type: "array";
+    _receiver: JsonEventArrayReceiver;
 
-    saveChild: boolean;
-    child?: JsonValue;
-    index: number;
+    _saveChild: boolean;
+    _child?: JsonValue;
+    _index: number;
 
-    save: boolean;
-    array: JsonArray;
+    _save: boolean;
+    _array: JsonArray;
   };
   export type _Struct = _Object | _Array;
 
@@ -1586,15 +1586,16 @@ export class JsonEventEmiiter {
   }
 
   private _endValue(value: JsonValue): void {
-    this._state.pop()!.receiver.end?.();
+    this._state.pop()!._receiver.end?.();
     if (this._state.length !== 0) {
-      (this._state[this._state.length - 1] as EventState._Struct).child = value;
+      (this._state[this._state.length - 1] as EventState._Struct)._child =
+        value;
     }
   }
   private _needSave() {
     return (
       this._state.length >= 2 &&
-      (this._state[this._state.length - 2] as EventState._Struct).saveChild
+      (this._state[this._state.length - 2] as EventState._Struct)._saveChild
     );
   }
 
@@ -1602,74 +1603,74 @@ export class JsonEventEmiiter {
     token: JsonToken & { type: "true" | "false" | "null" }
   ) {
     const state = this._state[this._state.length - 1] as EventState._StateLess;
-    if (state.type === undefined) {
-      state.type = token.type;
-      state.receiver.start?.();
+    if (state._type === undefined) {
+      state._type = token.type;
+      state._receiver.start?.();
     }
-    (state.receiver as any).feed?.(token);
+    (state._receiver as any).feed?.(token);
     if (token.done) {
       if (token.type === "null") {
-        (state.receiver as any).save?.(null);
+        (state._receiver as any).save?.(null);
         return this._endValue(null);
       } else if (token.type === "true") {
-        (state.receiver as any).save?.(true);
+        (state._receiver as any).save?.(true);
         return this._endValue(true);
       } else if (token.type === "false") {
-        (state.receiver as any).save?.(false);
+        (state._receiver as any).save?.(false);
         return this._endValue(false);
       }
     }
   }
   private _feedNumber(token: JsonToken & { type: "number" }) {
     const state = this._state[this._state.length - 1] as EventState._Number;
-    if (state.type === undefined) {
-      state.type = "number";
-      state.save = this._needSave() || state.receiver.save !== undefined;
-      state.list = [];
-      state.receiver.start?.();
+    if (state._type === undefined) {
+      state._type = "number";
+      state._save = this._needSave() || state._receiver.save !== undefined;
+      state._list = [];
+      state._receiver.start?.();
     }
-    state.receiver.feed?.(token);
-    state.list.push(token.character);
+    state._receiver.feed?.(token);
+    state._list.push(token.character);
     return;
   }
   private _feedString(token: JsonToken & { type: "string" }) {
     const state = this._state[this._state.length - 1] as EventState._String;
-    if (state.type === undefined) {
-      state.type = "string";
-      state.save = this._needSave() || state.receiver.save !== undefined;
-      state.list = [];
-      state.receiver.start?.();
+    if (state._type === undefined) {
+      state._type = "string";
+      state._save = this._needSave() || state._receiver.save !== undefined;
+      state._list = [];
+      state._receiver.start?.();
     }
-    state.receiver.feed?.(token);
+    state._receiver.feed?.(token);
     if (token.subtype === "normal") {
-      state.receiver.append?.(token.character);
-      if (state.save) state.list.push(token.character);
+      state._receiver.append?.(token.character);
+      if (state._save) state._list.push(token.character);
     } else if (
       token.subtype === "escape" ||
       token.subtype === "unicode" ||
       token.subtype === "escape_hex"
     ) {
       if (token.escaped_value !== undefined) {
-        state.receiver.append?.(token.escaped_value);
-        if (state.save) state.list.push(token.escaped_value);
+        state._receiver.append?.(token.escaped_value);
+        if (state._save) state._list.push(token.escaped_value);
       }
     } else if (token.subtype === "end") {
-      state.receiver.end?.();
-      const str = state.list.join("");
-      state.receiver.save?.(str);
+      state._receiver.end?.();
+      const str = state._list.join("");
+      state._receiver.save?.(str);
       this._endValue(str);
     }
   }
   private _feedIdentifier(token: JsonToken & { type: "identifier" }) {
     const state = this._state[this._state.length - 1] as EventState._String;
-    if (state.type === undefined) {
-      state.type = "string";
-      state.save = this._needSave() || state.receiver.save !== undefined;
-      state.list = [];
-      state.receiver.start?.();
-      state.isIdentifier = true;
+    if (state._type === undefined) {
+      state._type = "string";
+      state._save = this._needSave() || state._receiver.save !== undefined;
+      state._list = [];
+      state._receiver.start?.();
+      state._isIdentifier = true;
 
-      state.receiver.feed?.({
+      state._receiver.feed?.({
         location: "key",
         type: "string",
         subtype: "start",
@@ -1677,26 +1678,26 @@ export class JsonEventEmiiter {
       });
     }
     if (token.subtype === "normal") {
-      if (state.receiver.feed)
-        state.receiver.feed({
+      if (state._receiver.feed)
+        state._receiver.feed({
           location: "key",
           type: "string",
           subtype: "normal",
           character: token.character,
         });
-      state.receiver.append?.(token.character);
-      if (state.save) state.list.push(token.character);
+      state._receiver.append?.(token.character);
+      if (state._save) state._list.push(token.character);
     } else if (token.subtype === "escape_start") {
-      if (state.receiver.feed)
-        state.receiver.feed({
+      if (state._receiver.feed)
+        state._receiver.feed({
           location: "key",
           type: "string",
           subtype: token.index === 0 ? "escape_start" : "unicode_start",
           character: token.character,
         });
     } else {
-      if (state.receiver.feed)
-        state.receiver.feed({
+      if (state._receiver.feed)
+        state._receiver.feed({
           location: "key",
           type: "string",
           subtype: "unicode",
@@ -1705,148 +1706,148 @@ export class JsonEventEmiiter {
           character: token.character,
         });
       if (token.escaped_value !== undefined) {
-        state.receiver.append?.(token.escaped_value);
-        if (state.save) state.list.push(token.escaped_value);
+        state._receiver.append?.(token.escaped_value);
+        if (state._save) state._list.push(token.escaped_value);
       }
     }
   }
   private _feedObject(token: JsonToken & { type: "object" }) {
     let state = this._state[this._state.length - 1] as EventState._Object;
-    if (state.type === undefined) {
+    if (state._type === undefined) {
       if (token.subtype === "end") {
         this._state.pop();
         state = this._state[this._state.length - 1] as EventState._Object;
       } else {
-        state.type = "object";
-        state.save = this._needSave() || state.receiver.save !== undefined;
-        state.saveValue = state.save || state.receiver.set !== undefined;
-        state.saveKey =
-          state.saveValue ||
-          state.receiver.subscribeDict !== undefined ||
-          state.receiver.subscribeList !== undefined;
+        state._type = "object";
+        state._save = this._needSave() || state._receiver.save !== undefined;
+        state._saveValue = state._save || state._receiver.set !== undefined;
+        state._saveKey =
+          state._saveValue ||
+          state._receiver.subscribeDict !== undefined ||
+          state._receiver.subscribeList !== undefined;
 
-        state.object = {};
-        state.saveChild = state.saveKey;
+        state._object = {};
+        state._saveChild = state._saveKey;
 
-        state.receiver.start?.();
-        state.receiver.feed?.(token);
+        state._receiver.start?.();
+        state._receiver.feed?.(token);
         this._state.push({
-          type: undefined,
-          receiver: state.receiver.keyReceiver ?? { type: "any" },
+          _type: undefined,
+          _receiver: state._receiver.keyReceiver ?? { type: "any" },
         });
         return;
       }
     }
-    state.receiver.feed?.(token);
+    state._receiver.feed?.(token);
     if (token.subtype === "start") return;
     if (token.subtype === "end") {
-      if (state.key !== undefined) {
+      if (state._key !== undefined) {
         // trailing comma
-        if (state.save) state.object[state.key] = state.child!;
-        state.receiver.set?.(state.key, state.child!);
+        if (state._save) state._object[state._key] = state._child!;
+        state._receiver.set?.(state._key, state._child!);
       }
-      state.receiver.save?.(state.object);
-      return this._endValue(state.object);
+      state._receiver.save?.(state._object);
+      return this._endValue(state._object);
     }
     if (token.subtype === "next") {
-      if (state.save) state.object[state.key!] = state.child!;
-      state.receiver.set?.(state.key!, state.child!);
+      if (state._save) state._object[state._key!] = state._child!;
+      state._receiver.set?.(state._key!, state._child!);
 
-      state.saveChild = state.saveKey;
-      state.key = state.child = undefined;
+      state._saveChild = state._saveKey;
+      state._key = state._child = undefined;
       this._state.push({
-        type: undefined,
-        receiver: state.receiver.keyReceiver ?? { type: "any" },
+        _type: undefined,
+        _receiver: state._receiver.keyReceiver ?? { type: "any" },
       });
       return;
     }
     if (token.subtype === "value_start") {
-      state.saveChild = state.saveValue;
-      state.key = state.child as string | undefined;
+      state._saveChild = state._saveValue;
+      state._key = state._child as string | undefined;
       let receiver: JsonEventReceiver | undefined = undefined;
-      if (state.receiver.subscribeDict !== undefined)
-        receiver = state.receiver.subscribeDict[state.key!];
+      if (state._receiver.subscribeDict !== undefined)
+        receiver = state._receiver.subscribeDict[state._key!];
       if (
         receiver === undefined &&
-        state.receiver.subscribeList !== undefined
+        state._receiver.subscribeList !== undefined
       ) {
-        for (const item of state.receiver.subscribeList)
-          if (item.validator(state.key!)) {
+        for (const item of state._receiver.subscribeList)
+          if (item.validator(state._key!)) {
             receiver = item.valueReceiver;
             break;
           }
       }
       this._state.push({
-        type: undefined,
-        receiver: receiver ?? { type: "any" },
+        _type: undefined,
+        _receiver: receiver ?? { type: "any" },
       });
       return;
     }
   }
   private _feedArray(token: JsonToken & { type: "array" }): void {
     let state = this._state[this._state.length - 1] as EventState._Array;
-    if (state.type === undefined) {
+    if (state._type === undefined) {
       if (token.subtype === "end") {
         // trailing comma
         this._state.pop();
         state = this._state[this._state.length - 1] as EventState._Array;
       } else {
-        state.type = "array";
-        state.save = this._needSave() || state.receiver.save !== undefined;
-        state.saveChild = state.save || state.receiver.set !== undefined;
-        state.index = 0;
-        state.array = [];
+        state._type = "array";
+        state._save = this._needSave() || state._receiver.save !== undefined;
+        state._saveChild = state._save || state._receiver.set !== undefined;
+        state._index = 0;
+        state._array = [];
 
-        state.receiver.start?.();
-        state.receiver.feed?.(token);
+        state._receiver.start?.();
+        state._receiver.feed?.(token);
 
         let receiver: JsonEventReceiver = { type: "any" };
-        if (state.receiver.subscribeList !== undefined)
-          for (const item of state.receiver.subscribeList) {
-            if (item.validator(state.index)) {
+        if (state._receiver.subscribeList !== undefined)
+          for (const item of state._receiver.subscribeList) {
+            if (item.validator(state._index)) {
               receiver = item.valueReceiver;
               break;
             }
           }
         this._state.push({
-          type: undefined,
-          receiver: receiver,
+          _type: undefined,
+          _receiver: receiver,
         });
         return;
       }
     }
-    state.receiver.feed?.(token);
+    state._receiver.feed?.(token);
     if (token.subtype === "start") return;
     if (token.subtype === "end") {
-      if (state.save && state.child !== undefined)
-        state.array[state.index] = state.child!; // trailling comment
-      state.receiver.save?.(state.array);
-      return this._endValue(state.array);
+      if (state._save && state._child !== undefined)
+        state._array[state._index] = state._child!; // trailling comment
+      state._receiver.save?.(state._array);
+      return this._endValue(state._array);
     }
 
     // next element
-    if (state.save) state.array[state.index] = state.child!;
-    state.child = undefined;
-    state.receiver.set?.(state.index, state.child!);
-    ++state.index;
+    if (state._save) state._array[state._index] = state._child!;
+    state._child = undefined;
+    state._receiver.set?.(state._index, state._child!);
+    ++state._index;
 
     let receiver: JsonEventReceiver = { type: "any" };
-    if (state.receiver.subscribeList !== undefined)
-      for (const item of state.receiver.subscribeList) {
-        if (item.validator(state.index)) {
+    if (state._receiver.subscribeList !== undefined)
+      for (const item of state._receiver.subscribeList) {
+        if (item.validator(state._index)) {
           receiver = item.valueReceiver;
           break;
         }
       }
     this._state.push({
-      type: undefined,
-      receiver: receiver,
+      _type: undefined,
+      _receiver: receiver,
     });
     return;
   }
 
   constructor(receiver: JsonEventReceiver) {
-    this._state = [{ receiver: receiver }];
+    this._state = [{ _receiver: receiver }];
   }
   feed(token: JsonToken) {
     if (
@@ -1857,8 +1858,8 @@ export class JsonEventEmiiter {
       return;
 
     let state = this._state[this._state.length - 1];
-    if (state.type === "number" && token.type !== "number") {
-      const str = (state as EventState._Number).list.join("");
+    if (state._type === "number" && token.type !== "number") {
+      const str = (state as EventState._Number)._list.join("");
       let val: number;
       if (str[0] === "0") {
         /* compatible with JSON5 */
@@ -1876,31 +1877,31 @@ export class JsonEventEmiiter {
             val = parseFloat(str);
         }
       } else val = parseFloat(str);
-      (state as EventState._Number).receiver.save?.(val);
+      (state as EventState._Number)._receiver.save?.(val);
       this._endValue(val);
       state = this._state[this._state.length - 1];
     }
     if (
-      state.type === "string" &&
-      (state as EventState._String).isIdentifier &&
+      state._type === "string" &&
+      (state as EventState._String)._isIdentifier &&
       token.type !== "identifier"
     ) {
-      (state.receiver as any).feed?.({
+      (state._receiver as any).feed?.({
         location: "key",
         type: "string",
         subtype: "end",
         character: '"',
       });
-      state.receiver.end?.();
-      const str = (state as EventState._String).list.join("");
-      (state as EventState._String).receiver.save?.(str);
+      state._receiver.end?.();
+      const str = (state as EventState._String)._list.join("");
+      (state as EventState._String)._receiver.save?.(str);
       this._endValue(str);
       state = this._state[this._state.length - 1];
     }
 
-    if (state.receiver.type !== "any" && token.type !== state.receiver.type) {
-      if (!(token.type === "identifier" && state.receiver.type === "string"))
-        this._throw(`expected ${state.receiver.type} but got ${token.type}`);
+    if (state._receiver.type !== "any" && token.type !== state._receiver.type) {
+      if (!(token.type === "identifier" && state._receiver.type === "string"))
+        this._throw(`expected ${state._receiver.type} but got ${token.type}`);
     }
 
     switch (token.type) {
