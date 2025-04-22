@@ -708,7 +708,7 @@ export class JsonStreamParser {
             this._state = ValueState.EMPTY;
             return {
               location: LOCATION_NOT_KEY_TABLE[oldLocation],
-              type: "array",
+              type: "object",
               subtype: "start",
             };
           }
@@ -1262,8 +1262,10 @@ export class JsonStreamParser {
     }
     return ret;
   }
-  end() {
-    return this._feed(EOF);
+  end(): JsonToken {
+    const info: any = this._feed(EOF);
+    info.character = EOF;
+    return info;
   }
 
   get position() {
