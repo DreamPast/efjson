@@ -67,11 +67,8 @@ const isWhitespace = (c: string, fitJson5?: boolean) => {
 };
 const isNextLine = (c: string) => stringIncludes("\n\u2028\u2029\r", c);
 const isNumberSeparator = (c: string, fitJson5?: boolean) =>
-  c === EOF || isWhitespace(c, fitJson5) || c === "," || c === "]" || c === "}";
-const isControl = (c: string) => {
-  const code = c.charCodeAt(0);
-  return code >= 0 && code <= 0x1f;
-};
+  isWhitespace(c, fitJson5) || stringIncludes("\0,]}/", c);
+const isControl = (c: string) => c >= "\x00" && c <= "\x1F";
 const isHex = (c: string) =>
   (c >= "0" && c <= "9") || (c >= "a" && c <= "f") || (c >= "A" && c <= "F");
 
@@ -94,7 +91,7 @@ const ESCAPE_TABLE2: { [k: string]: string | undefined } = {
 const formatChar = (c: string) => {
   const code = c.charCodeAt(0);
   if (code === 0) return "EOF";
-  if (code < 0x7f && code > 0x20) return `'${c}'`;
+  if (code >= 0x20 && code < 0x7f) return `'${c}'`;
   const str = code.toString(16);
   return `\\u${repeatString("0", 4 - str.length)}${str}`;
 };
@@ -115,9 +112,14 @@ const enum ValueState {
   STRING_ESCAPE_HEX, // used to check \xNN
   NUMBER_INFINITY, // used to check "Infinity"
   NUMBER_NAN, // used to check "NaN"
-  NUMBER_HEX, // used to check "NaN"
-  NUMBER_OCT, // used to check "NaN"
-  NUMBER_BIN, // used to check "NaN"
+  NUMBER_HEX, // used to check hexadecimal number
+  NUMBER_OCT, // used to check octal number
+  NUMBER_BIN, // used to check binary number
+
+  COMMENT_MAY_START, // used to check comment
+  SINGLE_LINE_COMMENT, // used to check single line comment
+  MULTI_LINE_COMMENT, // used to check multi-line comment
+  MULTI_LINE_COMMENT_MAY_END, // used to check multi-line comment
 }
 
 const enum LocateState {
@@ -218,8 +220,15 @@ export type JsonOption = {
   acceptBinaryInteger?: boolean;
 
   // << comment >>
-  // acceptSingleLineComment?: boolean;
-  // accpetMultiLineComment?: boolean;
+  /**
+   * whether to accept single line comment
+   * @example '// a comment'
+   */
+  acceptSingleLineComment?: boolean;
+  /**
+   * whether to accept multi-line comment
+   */
+  accpetMultiLineComment?: boolean;
 };
 export const JSON5_OPTION: JsonOption = {
   // << white space >>
@@ -246,8 +255,8 @@ export const JSON5_OPTION: JsonOption = {
   acceptHexadecimalInteger: true,
 
   // << comment >>
-  // acceptSingleLineComment: true,
-  // accpetMultiLineComment: true,
+  acceptSingleLineComment: true,
+  accpetMultiLineComment: true,
 };
 
 namespace TokenInfo {
@@ -264,6 +273,11 @@ namespace TokenInfo {
     | { index: 0 | 1 | 2 | 3; done?: undefined }
     | { index: 4; done: true }
   );
+
+  /* JSON5 */
+  type _Comment = { type: "comment" } & {
+    subtype: "may_start" | "single_line" | "multi_line" | "multi_line_end";
+  };
 
   type _StringStartEnd = { subtype: "start" | "end" };
   type _StringNormal = { subtype: "normal" };
@@ -357,7 +371,7 @@ namespace TokenInfo {
     | { type: "array"; subtype: "start" | "end" };
 
   export type JsonTokenInfo =
-    | ({ location: _NotKeyLocation | "key" } & _Whitespace)
+    | ({ location: _NotKeyLocation | "key" } & (_Whitespace | _Comment))
     | { location: "root"; type: "eof" }
     | ({ location: _NotKeyLocation } & _NotKey)
     | ({ location: "key" } & _String)
@@ -557,6 +571,20 @@ export class JsonStreamParser {
         this._throw("unexpected EOF while parsing array");
     }
   }
+  private _handleSlash(): TokenInfo.JsonTokenInfo {
+    if (
+      this._option.acceptSingleLineComment ||
+      this._option.accpetMultiLineComment
+    ) {
+      this._state = ValueState.COMMENT_MAY_START;
+      return {
+        location: LOCATION_TABLE[this._location],
+        type: "comment",
+        subtype: "may_start",
+      };
+    }
+    this._throw("comment not allowed");
+  }
   private _handleNumberSeparator(c: string): TokenInfo.JsonTokenInfo {
     if (this._substate === -1)
       this._throw("a number cannot consist of only a negative sign");
@@ -566,6 +594,7 @@ export class JsonStreamParser {
     if (c === "}") return this._handleObjectEnd();
     if (c === "]") return this._handleArrayEnd();
     if (c === ",") return this._handleComma();
+    if (c === "/") return this._handleSlash();
     return {
       location: LOCATION_TABLE[this._location],
       type: "whitespace",
@@ -609,6 +638,7 @@ export class JsonStreamParser {
           };
         }
         if (c === EOF) return this._handleEOF();
+        if (c === "/") return this._handleSlash();
         if (this._location === LocateState.ROOT_END) {
           this._throw(
             `unexpected non-whitespace character ${formatChar(c)} after JSON`
@@ -1138,6 +1168,61 @@ export class JsonStreamParser {
         this._throw(
           `unexpected character ${formatChar} while parsing binary number`
         );
+
+      case ValueState.COMMENT_MAY_START:
+        if (this._option.acceptSingleLineComment && c === "/") {
+          this._state = ValueState.SINGLE_LINE_COMMENT;
+          return {
+            location: LOCATION_TABLE[this._location],
+            type: "comment",
+            subtype: "single_line",
+          };
+        }
+        if (this._option.accpetMultiLineComment && c === "*") {
+          this._state = ValueState.MULTI_LINE_COMMENT;
+          return {
+            location: LOCATION_TABLE[this._location],
+            type: "comment",
+            subtype: "multi_line",
+          };
+        }
+        this._throw("slash is not used for comment");
+      case ValueState.SINGLE_LINE_COMMENT:
+        if (isNextLine(c)) this._state = ValueState.EMPTY;
+        return {
+          location: LOCATION_TABLE[this._location],
+          type: "comment",
+          subtype: "single_line",
+        };
+      case ValueState.MULTI_LINE_COMMENT:
+        if (c === "*") {
+          this._state = ValueState.MULTI_LINE_COMMENT_MAY_END;
+          return {
+            location: LOCATION_TABLE[this._location],
+            type: "comment",
+            subtype: "multi_line",
+          };
+        }
+        return {
+          location: LOCATION_TABLE[this._location],
+          type: "comment",
+          subtype: "multi_line",
+        };
+      case ValueState.MULTI_LINE_COMMENT_MAY_END:
+        if (c === "/") {
+          this._state = ValueState.EMPTY;
+          return {
+            location: LOCATION_TABLE[this._location],
+            type: "comment",
+            subtype: "multi_line_end",
+          };
+        }
+        if (c !== "*") this._state = ValueState.MULTI_LINE_COMMENT;
+        return {
+          location: LOCATION_TABLE[this._location],
+          type: "comment",
+          subtype: "multi_line",
+        };
     }
   }
   private _checkNextLine(c: string) {
