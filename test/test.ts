@@ -3,16 +3,17 @@ import "./position";
 import "./number";
 import "./string";
 
-import { JSON5_OPTION, jsonStreamParse } from "../efjson";
+import { JSON5_OPTION } from "../efjson";
 import { checkError } from "./util";
 
-/* JSON5 "unquoted" is not supported yet */
 const str = `{
   // comments
+  unquoted: "I am unquoted",
+  \\u0032: "I am also unquoted",
   "comments" /* comment here */: /* or here */ "a" /* and here */, /**/
   'singleQuotes': 'I can use "double quotes" here',
   "lineBreaks": "Look, Mom! \\
-No \\\\n's! \\x01",
+No \\\\n's! \\x40",
   "hexadecimal": 0xdecaf,
   "leadingDecimalPoint": .8675309, "andTrailing": 8675309.,
   "positiveSign": +1,
