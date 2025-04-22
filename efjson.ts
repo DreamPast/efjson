@@ -662,6 +662,36 @@ export class JsonStreamParser {
       `expected '${dc}' while parsing ${literal}, but got ${formatChar(c)}`
     );
   }
+  private _handleNumberLiteral(
+    c: string,
+    literal: string,
+    subtype: string,
+    nextState: ValueState
+  ): TokenInfo.JsonTokenInfo {
+    const dc = literal[this._substate];
+    if (c === dc) {
+      if (++this._substate === literal.length) {
+        this._state = nextState;
+        this._location = this._nextState(this._location);
+        return {
+          location: LOCATION_NOT_KEY_TABLE[this._location],
+          type: "number",
+          subtype: subtype as any,
+          index: (this._substate - 1) as any,
+          done: true,
+        };
+      }
+      return {
+        location: LOCATION_NOT_KEY_TABLE[this._location],
+        type: "number",
+        subtype: subtype as any,
+        index: (this._substate - 1) as any,
+      };
+    }
+    this._throw(
+      `expected '${dc}' while parsing ${literal}, but got ${formatChar(c)}`
+    );
+  }
 
   private _stepEmpty(c: string): TokenInfo.JsonTokenInfo {
     if (isWhitespace(c, this._option.acceptJson5Whitespace)) {
@@ -873,9 +903,14 @@ export class JsonStreamParser {
       case ValueState.FALSE:
         return this._handleLiteral(c, "false", ValueState.EMPTY);
       case ValueState.NUMBER_INFINITY:
-        return this._handleLiteral(c, "Infinity", ValueState.EMPTY);
+        return this._handleNumberLiteral(
+          c,
+          "Infinity",
+          "infinity",
+          ValueState.EMPTY
+        );
       case ValueState.NUMBER_NAN:
-        return this._handleLiteral(c, "NaN", ValueState.EMPTY);
+        return this._handleNumberLiteral(c, "NaN", "nan", ValueState.EMPTY);
 
       case ValueState.STRING_MULTILINE_CR:
         if (c === "\n") {
