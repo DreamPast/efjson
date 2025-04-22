@@ -1885,7 +1885,7 @@ export class JsonEventEmiiter {
       (state as EventState._String).isIdentifier &&
       token.type !== "identifier"
     ) {
-      state.receiver.feed?.({
+      (state.receiver as any).feed?.({
         location: "key",
         type: "string",
         subtype: "end",
