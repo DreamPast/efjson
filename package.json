@@ -1,11 +1,14 @@
 {
   "name": "efjson",
-  "version": "0.1.0",
-  "description": "a streaming JSON parser",
+  "version": "0.2.0",
+  "description": "a streaming and event-driven JSON parser (with support for JSON5 and JSONC)",
   "main": "efjson.ts",
   "keywords": [
     "json",
-    "streaming"
+    "streaming",
+    "event-driven",
+    "json5",
+    "jsonc"
   ],
   "author": "Jin Cai",
   "license": "MIT",

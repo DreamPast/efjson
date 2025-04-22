@@ -1,10 +1,11 @@
-#  efjson: 基于流的JSON解析器
+#  efjson: 基于流的、事件响应式的JSON解析器
 
 [English](./README.md) [简体中文](./README_zh_CN.md)
 
 ## 特色
 
 - 无依赖
+- 支持JSON5和JSONC
 - 在无事件的情况下，流解析器只需要极少的内存
 
 流式解析JSON的状态图可以参考[JSON Token状态转义图](./doc/stream_token/README.md)
@@ -18,7 +19,7 @@
 ### 流式解析
 
 ```ts
-import { JsonStreamParser } from "efjson";
+import { JsonStreamParser } from "./efjson";
 
 const json = `
 {
@@ -53,6 +54,49 @@ const parser = new JsonStreamParser();
 for(const c of json) 
   console.log(parser.feed(c));
 console.log(parser.end());
+```
+
+### 事件响应
+
+```ts
+import { jsonEventParse } from "./efjson";
+
+const json = `
+{
+  "null": null,
+  "true": true,
+  "false": false,
+
+  "string": "string",
+  "string_with_escape": "string with \\"escape\\"",
+  "string_with_unicode_escape": "string with \\uD83D\\uDE00",
+  "string_with_unicode": "string with 😊",
+
+  "integer": 1234,
+  "negative": -1234,
+  "number": 1234.5678,
+  "number_with_exponent": 1.234e2,
+
+  "array": [
+    "this is the first element",
+    {
+      "object": "a nesting object"
+    }
+  ],
+  "object": {
+    "1st": [],
+    "2st": {}
+  }
+}
+`;
+
+jsonEventParse(json, {
+  type: "object",
+  set(key, value) {
+    console.log(key, value);
+  },
+});
+
 ```
 
 ## 参阅
