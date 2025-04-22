@@ -230,7 +230,7 @@ export type JsonOption = {
    */
   accpetMultiLineComment?: boolean;
 };
-export const JSON5_OPTION: JsonOption = {
+export const JSON5_OPTION: JsonOption = Object.freeze({
   // << white space >>
   acceptJson5Whitespace: true,
 
@@ -257,7 +257,7 @@ export const JSON5_OPTION: JsonOption = {
   // << comment >>
   acceptSingleLineComment: true,
   accpetMultiLineComment: true,
-};
+});
 
 namespace TokenInfo {
   type _Whitespace = { type: "whitespace" };
@@ -1251,7 +1251,7 @@ export class JsonStreamParser {
   }
 
   constructor(option: JsonOption = {}) {
-    this._option = option;
+    this._option = Object.freeze(Object.assign({}, option));
   }
   feed(s: string): JsonToken[] {
     const ret: JsonToken[] = [];
