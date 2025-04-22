@@ -1729,32 +1729,37 @@ export class JsonEventEmiiter {
     }
   }
   private _feedObject(token: JsonToken & { type: "object" }) {
-    const state = this._state[this._state.length - 1] as EventState._Object;
+    let state = this._state[this._state.length - 1] as EventState._Object;
     if (state.type === undefined) {
-      state.type = "object";
-      state.save = this._needSave() || state.receiver.save !== undefined;
-      state.saveValue = state.save || state.receiver.set !== undefined;
-      state.saveKey =
-        state.saveValue ||
-        state.receiver.subscribeDict !== undefined ||
-        state.receiver.subscribeList !== undefined;
+      if (token.subtype === "end") {
+        this._state.pop();
+        state = this._state[this._state.length - 1] as EventState._Object;
+      } else {
+        state.type = "object";
+        state.save = this._needSave() || state.receiver.save !== undefined;
+        state.saveValue = state.save || state.receiver.set !== undefined;
+        state.saveKey =
+          state.saveValue ||
+          state.receiver.subscribeDict !== undefined ||
+          state.receiver.subscribeList !== undefined;
 
-      state.object = {};
-      state.saveChild = state.saveKey;
+        state.object = {};
+        state.saveChild = state.saveKey;
 
-      state.receiver.start?.();
-      state.receiver.feed?.(token);
-      this._state.push({
-        type: undefined,
-        receiver: state.receiver.keyReceiver ?? { type: "any" },
-      });
-      return;
+        state.receiver.start?.();
+        state.receiver.feed?.(token);
+        this._state.push({
+          type: undefined,
+          receiver: state.receiver.keyReceiver ?? { type: "any" },
+        });
+        return;
+      }
     }
     state.receiver.feed?.(token);
     if (token.subtype === "start") return;
     if (token.subtype === "end") {
       if (state.key !== undefined) {
-        // trailling comment
+        // trailing comma
         if (state.save) state.object[state.key] = state.child!;
         state.receiver.set?.(state.key, state.child!);
       }
@@ -1797,30 +1802,36 @@ export class JsonEventEmiiter {
     }
   }
   private _feedArray(token: JsonToken & { type: "array" }): void {
-    const state = this._state[this._state.length - 1] as EventState._Array;
+    let state = this._state[this._state.length - 1] as EventState._Array;
     if (state.type === undefined) {
-      state.type = "array";
-      state.save = this._needSave() || state.receiver.save !== undefined;
-      state.saveChild = state.save || state.receiver.set !== undefined;
-      state.index = 0;
-      state.array = [];
+      if (token.subtype === "end") {
+        // trailing comma
+        this._state.pop();
+        state = this._state[this._state.length - 1] as EventState._Array;
+      } else {
+        state.type = "array";
+        state.save = this._needSave() || state.receiver.save !== undefined;
+        state.saveChild = state.save || state.receiver.set !== undefined;
+        state.index = 0;
+        state.array = [];
 
-      state.receiver.start?.();
-      state.receiver.feed?.(token);
+        state.receiver.start?.();
+        state.receiver.feed?.(token);
 
-      let receiver: JsonEventReceiver = { type: "any" };
-      if (state.receiver.subscribeList !== undefined)
-        for (const item of state.receiver.subscribeList) {
-          if (item.validator(state.index)) {
-            receiver = item.valueReceiver;
-            break;
+        let receiver: JsonEventReceiver = { type: "any" };
+        if (state.receiver.subscribeList !== undefined)
+          for (const item of state.receiver.subscribeList) {
+            if (item.validator(state.index)) {
+              receiver = item.valueReceiver;
+              break;
+            }
           }
-        }
-      this._state.push({
-        type: undefined,
-        receiver: receiver,
-      });
-      return;
+        this._state.push({
+          type: undefined,
+          receiver: receiver,
+        });
+        return;
+      }
     }
     state.receiver.feed?.(token);
     if (token.subtype === "start") return;
