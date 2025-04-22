@@ -28,31 +28,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-/* some polyfill for ES5 */
-/*
-const repeatString: (s: string, n: number) => string =
-  typeof (String.prototype as any).repeat === "function"
-    ? (s, n) => (s as any).repeat(n)
-    : (s, n) => {
-        let r: string = "";
-        for (n = n | 0; n > 0; n >>= 1) {
-          if (n & 1) r += s;
-          if (n > 1) s += s;
-        }
-        return r;
-      };
-const stringIncludes: (src: string, dst: string) => boolean =
-  typeof (String.prototype as any).includes === "function"
-    ? (src, dst) => (src as any).includes(dst)
-    : (src, dst) => {
-        for (let i = -1; ++i < src.length && src[i] === dst[0]; ) {
-          let j = 0;
-          while (j < dst.length && src[i + j] === dst[j]) ++j;
-          if (j === dst.length) return true;
-        }
-        return false;
-      };
-*/
 const repeatString = (s: string, n: number) => s.repeat(n);
 const stringIncludes = (src: string, dst: string) => src.includes(dst);
 
@@ -1370,7 +1345,7 @@ export class JsonStreamParser {
             location: "key",
             type: "identifier",
             subtype: "escape",
-            index: (this._substate.length - 1) as 0 | 1 | 2,
+            index: (this._substate.length - 2) as 0 | 1 | 2,
           };
         }
         this._throw(
@@ -1693,6 +1668,13 @@ export class JsonEventEmiiter {
       state.list = [];
       state.receiver.start?.();
       state.isIdentifier = true;
+
+      state.receiver.feed?.({
+        location: "key",
+        type: "string",
+        subtype: "start",
+        character: '"',
+      });
     }
     if (token.subtype === "normal") {
       if (state.receiver.feed)
@@ -1874,7 +1856,7 @@ export class JsonEventEmiiter {
     )
       return;
 
-    const state = this._state[this._state.length - 1];
+    let state = this._state[this._state.length - 1];
     if (state.type === "number" && token.type !== "number") {
       const str = (state as EventState._Number).list.join("");
       let val: number;
@@ -1896,16 +1878,24 @@ export class JsonEventEmiiter {
       } else val = parseFloat(str);
       (state as EventState._Number).receiver.save?.(val);
       this._endValue(val);
+      state = this._state[this._state.length - 1];
     }
     if (
       state.type === "string" &&
       (state as EventState._String).isIdentifier &&
       token.type !== "identifier"
     ) {
+      state.receiver.feed?.({
+        location: "key",
+        type: "string",
+        subtype: "end",
+        character: '"',
+      });
       state.receiver.end?.();
       const str = (state as EventState._String).list.join("");
       (state as EventState._String).receiver.save?.(str);
       this._endValue(str);
+      state = this._state[this._state.length - 1];
     }
 
     if (state.receiver.type !== "any" && token.type !== state.receiver.type) {
