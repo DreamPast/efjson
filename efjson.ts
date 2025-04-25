@@ -387,9 +387,17 @@ namespace TokenInfo {
     | {
         location: "object";
         type: "object";
-        subtype: "value_start" | "next" | "empty_next";
+        subtype: "value_start" | "next";
       }
-    | { location: "array"; type: "array"; subtype: "next" | "empty_next" };
+    /* JSON5 */
+    | {
+        location: "object";
+        type: "object";
+        subtype: "empty_next";
+      }
+    | { location: "array"; type: "array"; subtype: "next" | "empty_next" }
+    /* JSON5 */
+    | { location: "array"; type: "array"; subtype: "empty_next" };
 }
 export type JsonToken = TokenInfo.JsonTokenInfo & { character: string };
 
@@ -511,7 +519,7 @@ export function createJsonStreamParser(option?: JsonOption) {
    * possible_values:
    *  `STRING`|`STRING_ESCAPE`|`STRING_UNICODE`: [string] the character starting the string
    */
-  let _substate2: any;
+  let _substate2: unknown;
 
   const _stack: LocateState[] = [];
 
@@ -526,27 +534,36 @@ export function createJsonStreamParser(option?: JsonOption) {
     if (next === undefined) _throw("unexpected end");
     return next;
   };
-  const _handleComma = (): TokenInfo.JsonTokenInfo => {
+  const _handleComma = (token: any): void => {
     if (_location === LocateState.VALUE_END) {
       _location = LocateState.KEY_START;
-      return { location: "object", type: "object", subtype: "next" };
+      token.location = "object";
+      token.type = "object";
+      token.subtype = "next";
+      return;
     } else if (_location === LocateState.ELEMENT_END) {
       _location = LocateState.ELEMENT_START;
-      return { location: "array", type: "array", subtype: "next" };
+      token.location = "array";
+      token.type = "array";
+      token.subtype = "next";
+      return;
     }
     if (_location === LocateState.KEY_FIRST_START)
       _throw("extra commas not allowed in object");
     if (_location === LocateState.ELEMENT_FIRST_START) {
       if (acceptTrailingCommaInArray) {
         _location = LocateState.EMPTY_ARRAY;
-        return { location: "array", type: "array", subtype: "empty_next" };
+        token.location = "array";
+        token.type = "array";
+        token.subtype = "empty_next";
+        return;
       }
       _throw("extra commas not allowed in array");
     }
     if (_location === LocateState.VALUE_START) _throw("unpexted empty value");
     _throw("unexpected comma");
   };
-  const _handleArrayEnd = (): TokenInfo.JsonTokenInfo => {
+  const _handleArrayEnd = (token: any): void => {
     if (
       _location === LocateState.ELEMENT_FIRST_START ||
       _location === LocateState.ELEMENT_END ||
@@ -554,11 +571,10 @@ export function createJsonStreamParser(option?: JsonOption) {
     ) {
       _state = ValueState.EMPTY;
       _location = _nextState(_stack.pop()!);
-      return {
-        location: LOCATION_NOT_KEY_TABLE[_location],
-        type: "array",
-        subtype: "end",
-      };
+      token.location = LOCATION_NOT_KEY_TABLE[_location];
+      token.type = "array";
+      token.subtype = "end";
+      return;
     }
 
     if (_location === LocateState.ELEMENT_START) {
@@ -566,7 +582,7 @@ export function createJsonStreamParser(option?: JsonOption) {
     }
     _throw("bad closing bracket");
   };
-  const _handleObjectEnd = (): TokenInfo.JsonTokenInfo => {
+  const _handleObjectEnd = (token: any): void => {
     if (
       _location === LocateState.KEY_FIRST_START ||
       _location === LocateState.VALUE_END ||
@@ -574,11 +590,10 @@ export function createJsonStreamParser(option?: JsonOption) {
     ) {
       _state = ValueState.EMPTY;
       _location = _nextState(_stack.pop()!);
-      return {
-        location: LOCATION_NOT_KEY_TABLE[_location],
-        type: "object",
-        subtype: "end",
-      };
+      token.location = LOCATION_NOT_KEY_TABLE[_location];
+      token.type = "object";
+      token.subtype = "end";
+      return;
     }
 
     if (_location === LocateState.KEY_START) {
@@ -586,11 +601,14 @@ export function createJsonStreamParser(option?: JsonOption) {
     }
     _throw("bad closing curly brace");
   };
-  const _handleEOF = (): TokenInfo.JsonTokenInfo => {
+  const _handleEOF = (token: any): void => {
     switch (_location) {
       case LocateState.ROOT_START:
       case LocateState.ROOT_END:
-        return { location: "root", type: "eof" };
+        token.location = "root";
+        token.type = "eof";
+        token.subtype = undefined;
+        return;
       case LocateState.KEY_FIRST_START:
       case LocateState.KEY_START:
       case LocateState.KEY_END:
@@ -606,99 +624,87 @@ export function createJsonStreamParser(option?: JsonOption) {
         _throw("unexpected EOF while parsing array");
     }
   };
-  const _handleSlash = (): TokenInfo.JsonTokenInfo => {
+  const _handleSlash = (token: any): void => {
     if (acceptSingleLineComment || accpetMultiLineComment) {
       _state = ValueState.COMMENT_MAY_START;
-      return {
-        location: LOCATION_TABLE[_location],
-        type: "comment",
-        subtype: "may_start",
-      };
+      token.location = LOCATION_TABLE[_location];
+      token.type = "comment";
+      token.subtype = "may_start";
+      return;
     }
     _throw("comment not allowed");
   };
-  const _handleNumberSeparator = (c: string): TokenInfo.JsonTokenInfo => {
+  const _handleNumberSeparator = (token: any, c: string): void => {
     if (_substate === -1)
       _throw("a number cannot consist of only a negative sign");
     _state = ValueState.EMPTY;
     _location = _nextState(_location);
-    if (c === EOF) return _handleEOF();
-    if (c === "}") return _handleObjectEnd();
-    if (c === "]") return _handleArrayEnd();
-    if (c === ",") return _handleComma();
-    if (c === "/") return _handleSlash();
-    return {
-      location: LOCATION_TABLE[_location],
-      type: "whitespace",
-    };
+    if (c === EOF) return _handleEOF(token);
+    if (c === "}") return _handleObjectEnd(token);
+    if (c === "]") return _handleArrayEnd(token);
+    if (c === ",") return _handleComma(token);
+    if (c === "/") return _handleSlash(token);
+    token.location = LOCATION_TABLE[_location];
+    token.type = "whitespace";
+    token.subtype = undefined;
+    return;
   };
   const _handleLiteral = (
+    token: any,
     c: string,
     literal: string,
     nextState: ValueState
-  ): TokenInfo.JsonTokenInfo => {
+  ): void => {
     const dc = literal[_substate];
     if (c === dc) {
+      token.location = LOCATION_NOT_KEY_TABLE[_location];
+      token.type = literal;
+      token.index = _substate - 1;
       if (++_substate === literal.length) {
         _state = nextState;
         _location = _nextState(_location);
-        return {
-          location: LOCATION_NOT_KEY_TABLE[_location],
-          type: literal as any,
-          index: (_substate - 1) as any,
-          done: true,
-        };
-      }
-      return {
-        location: LOCATION_NOT_KEY_TABLE[_location],
-        type: literal as any,
-        index: (_substate - 1) as any,
-      };
+        token.done = true;
+      } else token.done = undefined;
+      return;
     }
     _throw(
       `expected '${dc}' while parsing ${literal}, but got ${formatChar(c)}`
     );
   };
   const _handleNumberLiteral = (
+    token: any,
     c: string,
     literal: string,
     subtype: string,
     nextState: ValueState
-  ): TokenInfo.JsonTokenInfo => {
+  ): void => {
     const dc = literal[_substate];
     if (c === dc) {
+      token.location = LOCATION_NOT_KEY_TABLE[_location];
+      token.type = "number";
+      token.subtype = subtype;
+      token.index = _substate - 1;
       if (++_substate === literal.length) {
         _state = nextState;
         _location = _nextState(_location);
-        return {
-          location: LOCATION_NOT_KEY_TABLE[_location],
-          type: "number",
-          subtype: subtype as any,
-          index: (_substate - 1) as any,
-          done: true,
-        };
-      }
-      return {
-        location: LOCATION_NOT_KEY_TABLE[_location],
-        type: "number",
-        subtype: subtype as any,
-        index: (_substate - 1) as any,
-      };
+        token.done = true;
+      } else token.done = false;
+      return;
     }
     _throw(
       `expected '${dc}' while parsing ${literal}, but got ${formatChar(c)}`
     );
   };
 
-  const _stepEmpty = (c: string): TokenInfo.JsonTokenInfo => {
+  const _stepEmpty = (token: any, c: string): void => {
     if (isWhitespace(c, acceptJson5Whitespace)) {
-      return {
-        location: LOCATION_TABLE[_location],
-        type: "whitespace",
-      };
+      token.location = LOCATION_TABLE[_location];
+      token.type = "whitespace";
+      token.subtype = undefined;
+      return;
     }
-    if (c === EOF) return _handleEOF();
-    if (c === "/") return _handleSlash();
+    if (c === EOF) return _handleEOF(token);
+    if (c === "/") return _handleSlash(token);
     if (_location === LocateState.ROOT_END) {
       _throw(`unexpected non-whitespace character ${formatChar(c)} after JSON`);
     }
@@ -706,11 +712,10 @@ export function createJsonStreamParser(option?: JsonOption) {
       if (c === "]") {
         _state = ValueState.EMPTY;
         _location = _nextState(_stack.pop()!);
-        return {
-          location: "array",
-          type: "array",
-          subtype: "end",
-        };
+        token.location = "array";
+        token.type = "array";
+        token.subtype = "end";
+        return;
       }
       _throw(
         "the first comma is treated as a trailing comma, more elements are not allowed"
@@ -720,11 +725,10 @@ export function createJsonStreamParser(option?: JsonOption) {
       if (c === "}") {
         _state = ValueState.EMPTY;
         _location = _nextState(_stack.pop()!);
-        return {
-          location: "object",
-          type: "object",
-          subtype: "end",
-        };
+        token.location = "object";
+        token.type = "object";
+        token.subtype = "end";
+        return;
       }
       _throw(
         "the first comma is treated as a trailing comma, more properties are not allowed"
@@ -735,11 +739,10 @@ export function createJsonStreamParser(option?: JsonOption) {
     if (c === '"' || (c === "'" && acceptSingleQuote)) {
       _state = ValueState.STRING;
       _substate2 = c;
-      return {
-        location: LOCATION_TABLE[_location],
-        type: "string",
-        subtype: "start",
-      };
+      token.location = LOCATION_TABLE[_location];
+      token.type = "string";
+      token.subtype = "start";
+      return;
     }
     if (c === "'") _throw("single quote not allowed");
     if (
@@ -749,20 +752,18 @@ export function createJsonStreamParser(option?: JsonOption) {
       if (acceptIdentifierKey)
         if (isIdentifierStart(c)) {
           _state = ValueState.IDENTIFIER;
-          return {
-            location: "key",
-            type: "identifier",
-            subtype: "normal",
-          };
+          token.location = "key";
+          token.type = "identifier";
+          token.subtype = "normal";
+          return;
         } else if (c === "\\") {
           _state = ValueState.IDENTIFIER_ESCAPE;
           _substate = "";
-          return {
-            location: "key",
-            type: "identifier",
-            subtype: "escape_start",
-            index: 0,
-          };
+          token.location = "key";
+          token.type = "identifier";
+          token.subtype = "escape_start";
+          token.index = 0;
+          return;
         }
       if (
         _location === LocateState.KEY_FIRST_START &&
@@ -770,11 +771,10 @@ export function createJsonStreamParser(option?: JsonOption) {
         acceptTrailingCommaInObject
       ) {
         _location = LocateState.EMPTY_OBJECT;
-        return {
-          location: "object",
-          type: "object",
-          subtype: "empty_next",
-        };
+        token.location = "object";
+        token.type = "object";
+        token.subtype = "empty_next";
+        return;
       }
       if (c !== "}") _throw("property name must be a string");
     }
@@ -783,11 +783,10 @@ export function createJsonStreamParser(option?: JsonOption) {
       if (_location === LocateState.KEY_END) {
         _location = LocateState.VALUE_START;
         _state = ValueState.EMPTY;
-        return {
-          location: "object",
-          type: "object",
-          subtype: "value_start",
-        };
+        token.location = "object";
+        token.type = "object";
+        token.subtype = "value_start";
+        return;
       }
       if (_location === LocateState.VALUE_START) {
         _throw("unexpected repeated colon");
@@ -807,31 +806,29 @@ export function createJsonStreamParser(option?: JsonOption) {
         _stack.push(oldLocation);
         _location = LocateState.ELEMENT_FIRST_START;
         _state = ValueState.EMPTY;
-        return {
-          location: LOCATION_NOT_KEY_TABLE[oldLocation],
-          type: "array",
-          subtype: "start",
-        };
+        token.location = LOCATION_NOT_KEY_TABLE[oldLocation];
+        token.type = "array";
+        token.subtype = "start";
+        return;
       }
       case "]":
-        return _handleArrayEnd();
+        return _handleArrayEnd(token);
 
       case "{": {
         const oldLocation = _location;
         _stack.push(oldLocation);
         _location = LocateState.KEY_FIRST_START;
         _state = ValueState.EMPTY;
-        return {
-          location: LOCATION_NOT_KEY_TABLE[oldLocation],
-          type: "object",
-          subtype: "start",
-        };
+        token.location = LOCATION_NOT_KEY_TABLE[oldLocation];
+        token.type = "object";
+        token.subtype = "start";
+        return;
       }
       case "}":
-        return _handleObjectEnd();
+        return _handleObjectEnd(token);
 
       case ",":
-        return _handleComma();
+        return _handleComma(token);
 
       case "+":
         if (!acceptPositiveSign) _throw("unexpected '+' sign");
@@ -839,11 +836,10 @@ export function createJsonStreamParser(option?: JsonOption) {
       case "-":
         _state = ValueState.NUMBER;
         _substate = -1;
-        return {
-          location: LOCATION_NOT_KEY_TABLE[_location],
-          type: "number",
-          subtype: "integer_sign",
-        };
+        token.location = LOCATION_NOT_KEY_TABLE[_location];
+        token.type = "number";
+        token.subtype = "integer_sign";
+        return;
       case "0":
       case "1":
       case "2":
@@ -856,102 +852,100 @@ export function createJsonStreamParser(option?: JsonOption) {
       case "9":
         _state = ValueState.NUMBER;
         _substate = c === "0" ? 0 : 1;
-        return {
-          location: LOCATION_NOT_KEY_TABLE[_location],
-          type: "number",
-          subtype: "integer_digit",
-        };
+        token.location = LOCATION_NOT_KEY_TABLE[_location];
+        token.type = "number";
+        token.subtype = "integer_digit";
+        return;
       case ".":
         if (acceptEmptyInteger) {
           _state = ValueState.NUMBER_FRACTION;
           _substate = false;
-          return {
-            location: LOCATION_NOT_KEY_TABLE[_location],
-            type: "number",
-            subtype: "fraction_start",
-          };
+          token.location = LOCATION_NOT_KEY_TABLE[_location];
+          token.type = "number";
+          token.subtype = "fraction_start";
+          return;
         }
         _throw("unexpected '.' before number");
       case "N":
         if (acceptNan) {
           _state = ValueState.NUMBER_NAN;
           _substate = 1;
-          return {
-            location: LOCATION_NOT_KEY_TABLE[_location],
-            type: "number",
-            subtype: "nan",
-            index: 0,
-          };
+          token.location = LOCATION_NOT_KEY_TABLE[_location];
+          token.type = "number";
+          token.subtype = "nan";
+          token.index = 0;
+          token.done = undefined;
+          return;
         }
       case "I":
         if (acceptInfinity) {
           _state = ValueState.NUMBER_INFINITY;
           _substate = 1;
-          return {
-            location: LOCATION_NOT_KEY_TABLE[_location],
-            type: "number",
-            subtype: "infinity",
-            index: 0,
-          };
+          token.location = LOCATION_NOT_KEY_TABLE[_location];
+          token.type = "number";
+          token.subtype = "infinity";
+          token.index = 0;
+          token.done = undefined;
+          return;
         }
 
       case "n":
         _state = ValueState.NULL;
         _substate = 1;
-        return {
-          location: LOCATION_NOT_KEY_TABLE[_location],
-          type: "null",
-          index: 0,
-        };
+        token.location = LOCATION_NOT_KEY_TABLE[_location];
+        token.type = "null";
+        token.index = 0;
+        token.done = undefined;
+        return;
       case "t":
         _state = ValueState.TRUE;
         _substate = 1;
-        return {
-          location: LOCATION_NOT_KEY_TABLE[_location],
-          type: "true",
-          index: 0,
-        };
+        token.location = LOCATION_NOT_KEY_TABLE[_location];
+        token.type = "true";
+        token.index = 0;
+        token.done = undefined;
+        return;
       case "f":
         _state = ValueState.FALSE;
         _substate = 1;
-        return {
-          location: LOCATION_NOT_KEY_TABLE[_location],
-          type: "false",
-          index: 0,
-        };
+        token.location = LOCATION_NOT_KEY_TABLE[_location];
+        token.type = "false";
+        token.index = 0;
+        token.done = undefined;
+        return;
       case "u":
         _throw(`"undefined" is not a valid JSON value`);
     }
     _throw(`unexpected ${formatChar(c)}`);
   };
-  const _step = (c: string): TokenInfo.JsonTokenInfo => {
+  const _step = (token: any, c: string): void => {
     switch (_state) {
       case ValueState.EMPTY:
-        return _stepEmpty(c);
+        return _stepEmpty(token, c);
       case ValueState.NULL:
-        return _handleLiteral(c, "null", ValueState.EMPTY);
+        return _handleLiteral(token, c, "null", ValueState.EMPTY);
       case ValueState.TRUE:
-        return _handleLiteral(c, "true", ValueState.EMPTY);
+        return _handleLiteral(token, c, "true", ValueState.EMPTY);
       case ValueState.FALSE:
-        return _handleLiteral(c, "false", ValueState.EMPTY);
+        return _handleLiteral(token, c, "false", ValueState.EMPTY);
       case ValueState.NUMBER_INFINITY:
         return _handleNumberLiteral(
+          token,
           c,
           "Infinity",
           "infinity",
           ValueState.EMPTY
         );
       case ValueState.NUMBER_NAN:
-        return _handleNumberLiteral(c, "NaN", "nan", ValueState.EMPTY);
+        return _handleNumberLiteral(token, c, "NaN", "nan", ValueState.EMPTY);
 
       case ValueState.STRING_MULTILINE_CR:
         if (c === "\n") {
           _state = ValueState.STRING;
-          return {
-            location: LOCATION_TABLE[_location],
-            type: "string",
-            subtype: "next_line",
-          };
+          token.location = LOCATION_TABLE[_location];
+          token.type = "string";
+          token.subtype = "next_line";
+          return;
         }
       // fallthrough
       case ValueState.STRING:
@@ -959,118 +953,97 @@ export function createJsonStreamParser(option?: JsonOption) {
           const oldLocation = _location;
           _location = _nextState(oldLocation);
           _state = ValueState.EMPTY;
-          return {
-            location: LOCATION_TABLE[oldLocation],
-            type: "string",
-            subtype: "end",
-          };
+          token.location = LOCATION_TABLE[oldLocation];
+          token.type = "string";
+          token.subtype = "end";
+          return;
         }
         if (c === "\\") {
           _state = ValueState.STRING_ESCAPE;
-          return {
-            location: LOCATION_TABLE[_location],
-            type: "string",
-            subtype: "escape_start",
-          };
+          token.location = LOCATION_TABLE[_location];
+          token.type = "string";
+          token.subtype = "escape_start";
+          return;
         }
         if (c === EOF) _throw("unexpected EOF while parsing string");
         if (isControl(c))
           _throw(`unexpected control character ${formatChar(c)}`);
-        return {
-          location: LOCATION_TABLE[_location],
-          type: "string",
-          subtype: "normal",
-        };
+        token.location = LOCATION_TABLE[_location];
+        token.type = "string";
+        token.subtype = "normal";
+        return;
       case ValueState.STRING_ESCAPE:
         if (c === "u") {
           _state = ValueState.STRING_UNICODE;
           _substate = "";
-          return {
-            location: LOCATION_TABLE[_location],
-            type: "string",
-            subtype: "unicode_start",
-          };
+          token.location = LOCATION_TABLE[_location];
+          token.type = "string";
+          token.subtype = "unicode_start";
+          return;
         }
         const dc = ESCAPE_TABLE[c];
         if (dc !== undefined) {
           _state = ValueState.STRING;
-          return {
-            location: LOCATION_TABLE[_location],
-            type: "string",
-            subtype: "escape",
-            escaped_value: dc as any,
-          };
+          token.location = LOCATION_TABLE[_location];
+          token.type = "string";
+          token.subtype = "escape";
+          token.escaped_value = dc;
+          return;
         }
         if (acceptMultilineString && isNextLine(c)) {
           _state =
             c === "\r" ? ValueState.STRING_MULTILINE_CR : ValueState.STRING;
-          return {
-            location: LOCATION_TABLE[_location],
-            type: "string",
-            subtype: "next_line",
-          };
+          token.location = LOCATION_TABLE[_location];
+          token.type = "string";
+          token.subtype = "next_line";
+          return;
         }
         if (accpetJson5StringEscape) {
           const dc = ESCAPE_TABLE2[c];
           if (dc !== undefined) {
             _state = ValueState.STRING;
-            return {
-              location: LOCATION_TABLE[_location],
-              type: "string",
-              subtype: "escape",
-              escaped_value: dc as any,
-            };
+            token.location = LOCATION_TABLE[_location];
+            token.type = "string";
+            token.subtype = "escape";
+            token.escaped_value = dc;
+            return;
           } else if (c === "x") {
             _state = ValueState.STRING_ESCAPE_HEX;
             _substate = "";
-            return {
-              location: LOCATION_TABLE[_location],
-              type: "string",
-              subtype: "escape_hex_start",
-            };
+            token.location = LOCATION_TABLE[_location];
+            token.type = "string";
+            token.subtype = "escape_hex_start";
+            return;
           }
         }
         _throw(`bad escaped character ${formatChar(c)}`);
       case ValueState.STRING_UNICODE:
         if (isHex(c)) {
           _substate += c;
+          token.location = LOCATION_TABLE[_location];
+          token.type = "string";
+          token.subtype = "unicode";
+          token.index = _substate.length - 1;
           if (_substate.length === 4) {
             _state = ValueState.STRING;
-            return {
-              location: LOCATION_TABLE[_location],
-              type: "string",
-              subtype: "unicode",
-              index: 3,
-              escaped_value: String.fromCharCode(parseInt(_substate, 16)),
-            };
-          }
-          return {
-            location: LOCATION_TABLE[_location],
-            type: "string",
-            subtype: "unicode",
-            index: (_substate.length - 1) as 1 | 2,
-          };
+            token.escaped_value = String.fromCharCode(parseInt(_substate, 16));
+          } else token.escaped_value = undefined;
+          return;
         }
         _throw(`bad Unicode escape character ${formatChar(c)}`);
       case ValueState.STRING_ESCAPE_HEX:
         if (isHex(c)) {
           _substate += c;
+          token.location = LOCATION_TABLE[_location];
+          token.type = "string";
+          token.subtype = "escape_hex";
+          token.index = _substate.length - 1;
           if (_substate.length === 2) {
             _state = ValueState.STRING;
-            return {
-              location: LOCATION_TABLE[_location],
-              type: "string",
-              subtype: "escape_hex",
-              index: 1,
-              escaped_value: String.fromCharCode(parseInt(_substate, 16)),
-            };
-          }
-          return {
-            location: LOCATION_TABLE[_location],
-            type: "string",
-            subtype: "escape_hex",
-            index: 0,
-          };
+            token.escaped_value = String.fromCharCode(parseInt(_substate, 16));
+            return;
+          } else token.escaped_value = undefined;
+          return;
         }
         _throw(`bad Hex escape character ${formatChar(c)}`);
 
@@ -1078,20 +1051,18 @@ export function createJsonStreamParser(option?: JsonOption) {
         if (c === "0") {
           if (_substate === 0) _throw("leading zero not allowed");
           if (_substate === -1) _substate = 0;
-          return {
-            location: LOCATION_NOT_KEY_TABLE[_location],
-            type: "number",
-            subtype: "integer_digit",
-          };
+          token.location = LOCATION_NOT_KEY_TABLE[_location];
+          token.type = "number";
+          token.subtype = "integer_digit";
+          return;
         }
         if (c >= "1" && c <= "9") {
           if (_substate === 0) _throw("leading zero not allowed");
           if (_substate === -1) _substate = 1;
-          return {
-            location: LOCATION_NOT_KEY_TABLE[_location],
-            type: "number",
-            subtype: "integer_digit",
-          };
+          token.location = LOCATION_NOT_KEY_TABLE[_location];
+          token.type = "number";
+          token.subtype = "integer_digit";
+          return;
         }
         if (c === ".") {
           if (_substate === -1 && !acceptEmptyInteger) {
@@ -1099,63 +1070,58 @@ export function createJsonStreamParser(option?: JsonOption) {
           }
           _state = ValueState.NUMBER_FRACTION;
           _substate = false;
-          return {
-            location: LOCATION_NOT_KEY_TABLE[_location],
-            type: "number",
-            subtype: "fraction_start",
-          };
+          token.location = LOCATION_NOT_KEY_TABLE[_location];
+          token.type = "number";
+          token.subtype = "fraction_start";
+          return;
         }
         if (_substate === -1) {
           if (acceptInfinity && c === "I") {
             // "-Infinity"
             _state = ValueState.NUMBER_INFINITY;
             _substate = 1;
-            return {
-              location: LOCATION_NOT_KEY_TABLE[_location],
-              type: "number",
-              subtype: "infinity",
-              index: 0,
-            };
+            token.location = LOCATION_NOT_KEY_TABLE[_location];
+            token.type = "number";
+            token.subtype = "infinity";
+            token.index = 0;
+            return;
           }
           _throw("the integer part cannnot be empty");
         }
 
         if (_substate === 0) {
-          const obj: any = {
-            location: LOCATION_NOT_KEY_TABLE[_location],
-            type: "number",
-          };
+          token.location = LOCATION_NOT_KEY_TABLE[_location];
+          token.type = "number";
           if (acceptHexadecimalInteger && (c === "x" || c === "X")) {
-            obj.subtype = "hex_start";
+            token.subtype = "hex_start";
             _state = ValueState.NUMBER_HEX;
             _substate = false;
-            return obj;
+            return;
           }
           if (acceptOctalInteger && (c === "o" || c === "O")) {
-            obj.subtype = "oct_start";
+            token.subtype = "oct_start";
             _state = ValueState.NUMBER_OCT;
             _substate = false;
-            return obj;
+            return;
           }
           if (acceptBinaryInteger && (c === "b" || c === "B")) {
-            obj.subtype = "bin_start";
+            token.subtype = "bin_start";
             _state = ValueState.NUMBER_BIN;
             _substate = false;
-            return obj;
+            return;
           }
         }
 
         if (c === "e" || c === "E") {
           _state = ValueState.NUMBER_EXPONENT;
           _substate = 0;
-          return {
-            location: LOCATION_NOT_KEY_TABLE[_location],
-            type: "number",
-            subtype: "exponent_start",
-          };
+          token.location = LOCATION_NOT_KEY_TABLE[_location];
+          token.type = "number";
+          token.subtype = "exponent_start";
+          return;
         }
         if (isNumberSeparator(c, acceptJson5Whitespace))
-          return _handleNumberSeparator(c);
+          return _handleNumberSeparator(token, c);
         _throw(
           `unexpected character ${formatChar(
             c
@@ -1164,11 +1130,10 @@ export function createJsonStreamParser(option?: JsonOption) {
       case ValueState.NUMBER_FRACTION:
         if (c >= "0" && c <= "9") {
           _substate = true;
-          return {
-            location: LOCATION_NOT_KEY_TABLE[_location],
-            type: "number",
-            subtype: "fraction_digit",
-          };
+          token.location = LOCATION_NOT_KEY_TABLE[_location];
+          token.type = "number";
+          token.subtype = "fraction_digit";
+          return;
         }
         if (_substate === false && !acceptEmptyFraction) {
           _throw("the fraction part cannot be empty");
@@ -1177,14 +1142,13 @@ export function createJsonStreamParser(option?: JsonOption) {
         if (c === "e" || c === "E") {
           _state = ValueState.NUMBER_EXPONENT;
           _substate = 0;
-          return {
-            location: LOCATION_NOT_KEY_TABLE[_location],
-            type: "number",
-            subtype: "exponent_start",
-          };
+          token.location = LOCATION_NOT_KEY_TABLE[_location];
+          token.type = "number";
+          token.subtype = "exponent_start";
+          return;
         }
         if (isNumberSeparator(c, acceptJson5Whitespace))
-          return _handleNumberSeparator(c);
+          return _handleNumberSeparator(token, c);
         _throw(
           `unexpected character ${formatChar(
             c
@@ -1194,11 +1158,10 @@ export function createJsonStreamParser(option?: JsonOption) {
         if (c === "+" || c === "-") {
           if (_substate === 0) {
             _substate = 1;
-            return {
-              location: LOCATION_NOT_KEY_TABLE[_location],
-              type: "number",
-              subtype: "exponent_sign",
-            };
+            token.location = LOCATION_NOT_KEY_TABLE[_location];
+            token.type = "number";
+            token.subtype = "exponent_sign";
+            return;
           } else if (_substate === 1) {
             _throw("unexpected repeated sign in exponent part");
           } else if (_substate === 2) {
@@ -1207,18 +1170,17 @@ export function createJsonStreamParser(option?: JsonOption) {
         }
         if (c >= "0" && c <= "9") {
           _substate = 2;
-          return {
-            location: LOCATION_NOT_KEY_TABLE[_location],
-            type: "number",
-            subtype: "exponent_digit",
-          };
+          token.location = LOCATION_NOT_KEY_TABLE[_location];
+          token.type = "number";
+          token.subtype = "exponent_digit";
+          return;
         }
         if (_substate === 0 || _substate === 1) {
           _throw("the exponent part cannot be empty");
         }
 
         if (isNumberSeparator(c, acceptJson5Whitespace))
-          return _handleNumberSeparator(c);
+          return _handleNumberSeparator(token, c);
         _throw(
           `unexpected character ${formatChar(
             c
@@ -1227,11 +1189,10 @@ export function createJsonStreamParser(option?: JsonOption) {
       case ValueState.NUMBER_HEX:
         if (isHex(c)) {
           _substate = true;
-          return {
-            location: LOCATION_NOT_KEY_TABLE[_location],
-            type: "number",
-            subtype: "hex",
-          };
+          token.location = LOCATION_NOT_KEY_TABLE[_location];
+          token.type = "number";
+          token.subtype = "hex";
+          return;
         }
         if (c === "e" || c === "E")
           _throw("exponent not allowed in hexadecimal number");
@@ -1239,7 +1200,7 @@ export function createJsonStreamParser(option?: JsonOption) {
         if (_substate === false)
           _throw("the hexadecimal integer part cannot be empty");
         if (isNumberSeparator(c, acceptJson5Whitespace))
-          return _handleNumberSeparator(c);
+          return _handleNumberSeparator(token, c);
         _throw(
           `unexpected character ${formatChar} while parsing hexadecimal number`
         );
@@ -1247,11 +1208,10 @@ export function createJsonStreamParser(option?: JsonOption) {
       case ValueState.NUMBER_OCT:
         if (c >= "0" && c <= "7") {
           _substate = true;
-          return {
-            location: LOCATION_NOT_KEY_TABLE[_location],
-            type: "number",
-            subtype: "oct",
-          };
+          token.location = LOCATION_NOT_KEY_TABLE[_location];
+          token.type = "number";
+          token.subtype = "oct";
+          return;
         }
         if (c === "e" || c === "E")
           _throw("exponent not allowed in octal number");
@@ -1259,17 +1219,16 @@ export function createJsonStreamParser(option?: JsonOption) {
         if (_substate === false)
           _throw("the octal integer part cannot be empty");
         if (isNumberSeparator(c, acceptJson5Whitespace))
-          return _handleNumberSeparator(c);
+          return _handleNumberSeparator(token, c);
         _throw(`unexpected character ${formatChar} while parsing octal number`);
 
       case ValueState.NUMBER_BIN:
         if (c === "0" || c === "1") {
           _substate = true;
-          return {
-            location: LOCATION_NOT_KEY_TABLE[_location],
-            type: "number",
-            subtype: "bin",
-          };
+          token.location = LOCATION_NOT_KEY_TABLE[_location];
+          token.type = "number";
+          token.subtype = "bin";
+          return;
         }
         if (c === "e" || c === "E")
           _throw("exponent not allowed in binary number");
@@ -1277,7 +1236,7 @@ export function createJsonStreamParser(option?: JsonOption) {
         if (_substate === false)
           _throw("the binary integer part cannot be empty");
         if (isNumberSeparator(c, acceptJson5Whitespace))
-          return _handleNumberSeparator(c);
+          return _handleNumberSeparator(token, c);
         _throw(
           `unexpected character ${formatChar} while parsing binary number`
         );
@@ -1285,78 +1244,72 @@ export function createJsonStreamParser(option?: JsonOption) {
       case ValueState.COMMENT_MAY_START:
         if (acceptSingleLineComment && c === "/") {
           _state = ValueState.SINGLE_LINE_COMMENT;
-          return {
-            location: LOCATION_TABLE[_location],
-            type: "comment",
-            subtype: "single_line",
-          };
+          token.location = LOCATION_TABLE[_location];
+          token.type = "comment";
+          token.subtype = "single_line";
+          return;
         }
         if (accpetMultiLineComment && c === "*") {
           _state = ValueState.MULTI_LINE_COMMENT;
-          return {
-            location: LOCATION_TABLE[_location],
-            type: "comment",
-            subtype: "multi_line",
-          };
+          token.location = LOCATION_TABLE[_location];
+          token.type = "comment";
+          token.subtype = "multi_line";
+          return;
         }
         _throw("slash is not used for comment");
       case ValueState.SINGLE_LINE_COMMENT:
         if (isNextLine(c)) _state = ValueState.EMPTY;
-        return {
-          location: LOCATION_TABLE[_location],
-          type: "comment",
-          subtype: "single_line",
-        };
+        token.location = LOCATION_TABLE[_location];
+        token.type = "comment";
+        token.subtype = "single_line";
+        return;
       case ValueState.MULTI_LINE_COMMENT:
         if (c === "*") {
           _state = ValueState.MULTI_LINE_COMMENT_MAY_END;
-          return {
-            location: LOCATION_TABLE[_location],
-            type: "comment",
-            subtype: "multi_line",
-          };
+          token.location = LOCATION_TABLE[_location];
+          token.type = "comment";
+          token.subtype = "multi_line";
+          return;
         }
-        return {
-          location: LOCATION_TABLE[_location],
-          type: "comment",
-          subtype: "multi_line",
-        };
+        token.location = LOCATION_TABLE[_location];
+        token.type = "comment";
+        token.subtype = "multi_line";
+        return;
       case ValueState.MULTI_LINE_COMMENT_MAY_END:
         if (c === "/") {
           _state = ValueState.EMPTY;
-          return {
-            location: LOCATION_TABLE[_location],
-            type: "comment",
-            subtype: "multi_line_end",
-          };
+          token.location = LOCATION_TABLE[_location];
+          token.type = "comment";
+          token.subtype = "multi_line_end";
+          return;
         }
         if (c !== "*") _state = ValueState.MULTI_LINE_COMMENT;
-        return {
-          location: LOCATION_TABLE[_location],
-          type: "comment",
-          subtype: "multi_line",
-        };
-
+        token.location = LOCATION_TABLE[_location];
+        token.type = "comment";
+        token.subtype = "multi_line";
+        return;
       case ValueState.IDENTIFIER:
         if (c === ":") {
           _location = LocateState.VALUE_START;
           _state = ValueState.EMPTY;
-          return {
-            location: "object",
-            type: "object",
-            subtype: "value_start",
-          };
+          token.location = "object";
+          token.type = "object";
+          token.subtype = "value_start";
+          return;
         }
         if (isWhitespace(c, acceptJson5Whitespace)) {
           _state = ValueState.EMPTY;
           _location = LocateState.KEY_END;
-          return {
-            location: "key",
-            type: "whitespace",
-          };
+          token.location = "key";
+          token.type = "whitespace";
+          return;
         }
-        if (isIdentifierNext(c))
-          return { location: "key", type: "identifier", subtype: "normal" };
+        if (isIdentifierNext(c)) {
+          token.location = "key";
+          token.type = "identifier";
+          token.subtype = "normal";
+          return;
+        }
         _throw(
           `unexpected character ${formatChar(c)} while parsing identifier`
         );
@@ -1366,12 +1319,11 @@ export function createJsonStreamParser(option?: JsonOption) {
           if (c === "u") {
             _state = ValueState.IDENTIFIER_ESCAPE;
             _substate = "u";
-            return {
-              location: "key",
-              type: "identifier",
-              subtype: "escape_start",
-              index: 1,
-            };
+            token.location = "key";
+            token.type = "identifier";
+            token.subtype = "escape_start";
+            token.index = 1;
+            return;
           }
           _throw(
             `expected 'u' after '\\' in identifier, but got ${formatChar(c)}`
@@ -1379,25 +1331,18 @@ export function createJsonStreamParser(option?: JsonOption) {
         }
         if (isHex(c)) {
           _substate += c;
+          token.location = "key";
+          token.type = "identifier";
+          token.subtype = "escape";
+          token.index = _substate.length - 2;
           if (_substate.length === 5) {
             _location = LocateState.KEY_END;
             _state = ValueState.EMPTY;
-            return {
-              location: "key",
-              type: "identifier",
-              subtype: "escape",
-              index: 3,
-              escaped_value: String.fromCharCode(
-                parseInt((_substate as string).slice(1), 16)
-              ),
-            };
-          }
-          return {
-            location: "key",
-            type: "identifier",
-            subtype: "escape",
-            index: (_substate.length - 2) as 0 | 1 | 2,
-          };
+            token.escaped_value = String.fromCharCode(
+              parseInt((_substate as string).slice(1), 16)
+            );
+          } else token.escaped_value = undefined;
+          return;
         }
         _throw(
           `expected hexadecimal number after '\\u' in identifier, but got ${formatChar(
@@ -1415,9 +1360,9 @@ export function createJsonStreamParser(option?: JsonOption) {
       _meetCr = false;
     }
   };
-  const _feed = (c: string) => {
+  const _feed = (token: JsonToken, c: string) => {
     _checkNextLine(c);
-    const ret = _step(c);
+    _step(token, c);
     ++_position;
     if (isNextLine(c)) {
       if (c === "\r") {
@@ -1428,23 +1373,23 @@ export function createJsonStreamParser(option?: JsonOption) {
         _column = 1;
       }
     } else if (c !== EOF) ++_column;
-    return ret;
+    token.character = c;
+    return token;
   };
 
   return {
-    feed(s: string): JsonToken[] {
+    feedOneTo: _feed,
+    feed(s: string) {
       const ret: JsonToken[] = [];
       for (const c of s) {
-        const info: any = _feed(c);
-        info.character = c;
-        ret.push(info);
+        const token: JsonToken = {} as any;
+        ret.push(_feed(token, c));
       }
       return ret;
     },
     end(): JsonToken {
-      const info: any = _feed(EOF);
-      info.character = EOF;
-      return info;
+      const token: JsonToken = {} as any;
+      return _feed(token, EOF);
     },
 
     get position() {
@@ -1464,11 +1409,6 @@ export function jsonStreamParse(s: string, option?: JsonOption) {
   const ret = parser.feed(s);
   parser.end();
   return ret;
-}
-export function* jsonStreamGenerator(s: Iterable<string>, option?: JsonOption) {
-  const parser = createJsonStreamParser(option);
-  for (const chunk of s) yield* parser.feed(chunk);
-  yield parser.end();
 }
 
 //
@@ -2002,10 +1942,10 @@ export const createJsonEventParser = (
 ) => {
   const _parser = createJsonStreamParser(option);
   const _emitter = createJsonEventEmitter(receiver);
+  const _token: JsonToken = {} as any;
   return {
     feed(s: string) {
-      const tokens = _parser.feed(s);
-      for (const token of tokens) _emitter.feed(token);
+      for (const c of s) _emitter.feed(_parser.feedOneTo(_token, c));
     },
     end() {
       _emitter.feed(_parser.end());
