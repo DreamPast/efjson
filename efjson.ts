@@ -28,21 +28,18 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-const repeatString = (s: string, n: number) => s.repeat(n);
-const stringIncludes = (src: string, dst: string) => src.includes(dst);
-
 const EOF = "\u0000";
 const EXTRA_WHITESPACE =
   /* <VT>, <FF>, <NBSP>, <BOM>, <USP> */
   "\u000B\u000C\u00A0\uFEFF\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u202F\u205F\u3000";
 const isWhitespace = (c: string, fitJson5?: boolean) => {
   /* <SP>, <TAB>, <LF>, <CR> */
-  if (stringIncludes(" \t\n\r", c)) return true;
-  return fitJson5 && stringIncludes(EXTRA_WHITESPACE, c);
+  if (" \t\n\r".includes(c)) return true;
+  return fitJson5 && EXTRA_WHITESPACE.includes(c);
 };
-const isNextLine = (c: string) => stringIncludes("\n\u2028\u2029\r", c);
+const isNextLine = (c: string) => "\n\u2028\u2029\r".includes(c);
 const isNumberSeparator = (c: string, fitJson5?: boolean) =>
-  isWhitespace(c, fitJson5) || stringIncludes("\0,]}/", c);
+  isWhitespace(c, fitJson5) || "\0,]}/".includes(c);
 const isControl = (c: string) => c >= "\x00" && c <= "\x1F";
 const isHex = (c: string) =>
   (c >= "0" && c <= "9") || (c >= "a" && c <= "f") || (c >= "A" && c <= "F");
@@ -72,7 +69,7 @@ const formatChar = (c: string) => {
   if (code === 0) return "EOF";
   if (code >= 0x20 && code < 0x7f) return `'${c}'`;
   const str = code.toString(16);
-  return `\\u${repeatString("0", 4 - str.length)}${str}`;
+  return `\\u${"0".repeat(4 - str.length)}${str}`;
 };
 
 const enum ValueState {
@@ -434,13 +431,29 @@ export class JsonStreamParserError extends JsonParserError {
   }
 }
 
-export class JsonStreamParser {
-  private readonly _option: JsonOption;
+export function createJsonStreamParser(option?: JsonOption) {
+  const acceptJson5Whitespace = option?.acceptJson5Whitespace;
+  const acceptTrailingCommaInArray = option?.acceptTrailingCommaInArray;
+  const acceptTrailingCommaInObject = option?.acceptTrailingCommaInObject;
+  const acceptIdentifierKey = option?.acceptIdentifierKey;
+  const acceptSingleQuote = option?.acceptSingleQuote;
+  const acceptMultilineString = option?.acceptMultilineString;
+  const accpetJson5StringEscape = option?.accpetJson5StringEscape;
+  const acceptPositiveSign = option?.acceptPositiveSign;
+  const acceptEmptyFraction = option?.acceptEmptyFraction;
+  const acceptEmptyInteger = option?.acceptEmptyInteger;
+  const acceptNan = option?.acceptNan;
+  const acceptInfinity = option?.acceptInfinity;
+  const acceptHexadecimalInteger = option?.acceptHexadecimalInteger;
+  const acceptOctalInteger = option?.acceptOctalInteger;
+  const acceptBinaryInteger = option?.acceptBinaryInteger;
+  const acceptSingleLineComment = option?.acceptSingleLineComment;
+  const accpetMultiLineComment = option?.accpetMultiLineComment;
 
-  private _position = 0;
-  private _line = 1;
-  private _column = 1;
-  private _meetCr = false;
+  let _position = 0;
+  let _line = 1;
+  let _column = 1;
+  let _meetCr = false;
 
   /**
    * The state of the location
@@ -448,7 +461,7 @@ export class JsonStreamParser {
    * - at the start/end of an object's key or value
    * - at the start/end of an array's element
    */
-  private _location = LocateState.ROOT_START;
+  let _location = LocateState.ROOT_START;
   /**
    * The state of the value
    * - parse empty
@@ -456,7 +469,7 @@ export class JsonStreamParser {
    * - parse boolean
    * - parse string
    */
-  private _state = ValueState.EMPTY;
+  let _state = ValueState.EMPTY;
   /**
    * primary value substate (see following)
    *
@@ -483,88 +496,85 @@ export class JsonStreamParser {
    *
    *   `IDENTIFIER_ESCAPE`: [string] Unicode sequence (includes 'u' prefix)
    */
-  private _substate: any;
+  let _substate: any;
   /**
    * Additional primary value substate (see following)
    *
    * possible_values:
    *  `STRING`|`STRING_ESCAPE`|`STRING_UNICODE`: [string] the character starting the string
    */
-  private _substate2: any;
+  let _substate2: any;
 
-  private _stack: LocateState[] = [];
+  const _stack: LocateState[] = [];
 
-  private _throw(msg?: string): never {
+  function _throw(msg?: string): never {
     throw new JsonStreamParserError(
-      `JsonParser Error at (${this._position})${this._line}:${this._column} - ${msg}`
+      `JsonParser Error at (${_position})${_line}:${_column} - ${msg}`
     );
   }
 
-  private _nextState(stat: LocateState) {
+  const _nextState = (stat: LocateState): LocateState => {
     const next = NEXT_STATE_TABLE[stat];
-    if (next === undefined) this._throw("unexpected end");
+    if (next === undefined) _throw("unexpected end");
     return next;
-  }
-  private _handleComma(): TokenInfo.JsonTokenInfo {
-    if (this._location === LocateState.VALUE_END) {
-      this._location = LocateState.KEY_START;
+  };
+  const _handleComma = (): TokenInfo.JsonTokenInfo => {
+    if (_location === LocateState.VALUE_END) {
+      _location = LocateState.KEY_START;
       return { location: "object", type: "object", subtype: "next" };
-    } else if (this._location === LocateState.ELEMENT_END) {
-      this._location = LocateState.ELEMENT_START;
+    } else if (_location === LocateState.ELEMENT_END) {
+      _location = LocateState.ELEMENT_START;
       return { location: "array", type: "array", subtype: "next" };
     }
-    if (this._location === LocateState.KEY_FIRST_START)
-      this._throw("extra commas not allowed in object");
-    if (this._location === LocateState.ELEMENT_FIRST_START)
-      this._throw("extra commas not allowed in array");
-    if (this._location === LocateState.VALUE_START)
-      this._throw("unpexted empty value");
-    this._throw("unexpected comma");
-  }
-  private _handleArrayEnd(): TokenInfo.JsonTokenInfo {
+    if (_location === LocateState.KEY_FIRST_START)
+      _throw("extra commas not allowed in object");
+    if (_location === LocateState.ELEMENT_FIRST_START)
+      _throw("extra commas not allowed in array");
+    if (_location === LocateState.VALUE_START) _throw("unpexted empty value");
+    _throw("unexpected comma");
+  };
+  const _handleArrayEnd = (): TokenInfo.JsonTokenInfo => {
     if (
-      this._location === LocateState.ELEMENT_FIRST_START ||
-      this._location === LocateState.ELEMENT_END ||
-      (this._location === LocateState.ELEMENT_START &&
-        this._option.acceptTrailingCommaInArray)
+      _location === LocateState.ELEMENT_FIRST_START ||
+      _location === LocateState.ELEMENT_END ||
+      (_location === LocateState.ELEMENT_START && acceptTrailingCommaInArray)
     ) {
-      this._state = ValueState.EMPTY;
-      this._location = this._nextState(this._stack.pop()!);
+      _state = ValueState.EMPTY;
+      _location = _nextState(_stack.pop()!);
       return {
-        location: LOCATION_NOT_KEY_TABLE[this._location],
+        location: LOCATION_NOT_KEY_TABLE[_location],
         type: "array",
         subtype: "end",
       };
     }
 
-    if (this._location === LocateState.ELEMENT_START) {
-      this._throw("extra commas not allowed in array");
+    if (_location === LocateState.ELEMENT_START) {
+      _throw("extra commas not allowed in array");
     }
-    this._throw("bad closing bracket");
-  }
-  private _handleObjectEnd(): TokenInfo.JsonTokenInfo {
+    _throw("bad closing bracket");
+  };
+  const _handleObjectEnd = (): TokenInfo.JsonTokenInfo => {
     if (
-      this._location === LocateState.KEY_FIRST_START ||
-      this._location === LocateState.VALUE_END ||
-      (this._location === LocateState.KEY_START &&
-        this._option.acceptTrailingCommaInObject)
+      _location === LocateState.KEY_FIRST_START ||
+      _location === LocateState.VALUE_END ||
+      (_location === LocateState.KEY_START && acceptTrailingCommaInObject)
     ) {
-      this._state = ValueState.EMPTY;
-      this._location = this._nextState(this._stack.pop()!);
+      _state = ValueState.EMPTY;
+      _location = _nextState(_stack.pop()!);
       return {
-        location: LOCATION_NOT_KEY_TABLE[this._location],
+        location: LOCATION_NOT_KEY_TABLE[_location],
         type: "object",
         subtype: "end",
       };
     }
 
-    if (this._location === LocateState.KEY_START) {
-      this._throw("extra commas not allowed in object");
+    if (_location === LocateState.KEY_START) {
+      _throw("extra commas not allowed in object");
     }
-    this._throw("bad closing curly brace");
-  }
-  private _handleEOF(): TokenInfo.JsonTokenInfo {
-    switch (this._location) {
+    _throw("bad closing curly brace");
+  };
+  const _handleEOF = (): TokenInfo.JsonTokenInfo => {
+    switch (_location) {
       case LocateState.ROOT_START:
       case LocateState.ROOT_END:
         return { location: "root", type: "eof" };
@@ -573,142 +583,137 @@ export class JsonStreamParser {
       case LocateState.KEY_END:
       case LocateState.VALUE_START:
       case LocateState.VALUE_END:
-        this._throw("unexpected EOF while parsing object");
+        _throw("unexpected EOF while parsing object");
 
       case LocateState.ELEMENT_FIRST_START:
       case LocateState.ELEMENT_START:
       case LocateState.ELEMENT_END:
-        this._throw("unexpected EOF while parsing array");
+        _throw("unexpected EOF while parsing array");
     }
-  }
-  private _handleSlash(): TokenInfo.JsonTokenInfo {
-    if (
-      this._option.acceptSingleLineComment ||
-      this._option.accpetMultiLineComment
-    ) {
-      this._state = ValueState.COMMENT_MAY_START;
+  };
+  const _handleSlash = (): TokenInfo.JsonTokenInfo => {
+    if (acceptSingleLineComment || accpetMultiLineComment) {
+      _state = ValueState.COMMENT_MAY_START;
       return {
-        location: LOCATION_TABLE[this._location],
+        location: LOCATION_TABLE[_location],
         type: "comment",
         subtype: "may_start",
       };
     }
-    this._throw("comment not allowed");
-  }
-  private _handleNumberSeparator(c: string): TokenInfo.JsonTokenInfo {
-    if (this._substate === -1)
-      this._throw("a number cannot consist of only a negative sign");
-    this._state = ValueState.EMPTY;
-    this._location = this._nextState(this._location);
-    if (c === EOF) return this._handleEOF();
-    if (c === "}") return this._handleObjectEnd();
-    if (c === "]") return this._handleArrayEnd();
-    if (c === ",") return this._handleComma();
-    if (c === "/") return this._handleSlash();
+    _throw("comment not allowed");
+  };
+  const _handleNumberSeparator = (c: string): TokenInfo.JsonTokenInfo => {
+    if (_substate === -1)
+      _throw("a number cannot consist of only a negative sign");
+    _state = ValueState.EMPTY;
+    _location = _nextState(_location);
+    if (c === EOF) return _handleEOF();
+    if (c === "}") return _handleObjectEnd();
+    if (c === "]") return _handleArrayEnd();
+    if (c === ",") return _handleComma();
+    if (c === "/") return _handleSlash();
     return {
-      location: LOCATION_TABLE[this._location],
+      location: LOCATION_TABLE[_location],
       type: "whitespace",
     };
-  }
-  private _handleLiteral(
+  };
+  const _handleLiteral = (
     c: string,
     literal: string,
     nextState: ValueState
-  ): TokenInfo.JsonTokenInfo {
-    const dc = literal[this._substate];
+  ): TokenInfo.JsonTokenInfo => {
+    const dc = literal[_substate];
     if (c === dc) {
-      if (++this._substate === literal.length) {
-        this._state = nextState;
-        this._location = this._nextState(this._location);
+      if (++_substate === literal.length) {
+        _state = nextState;
+        _location = _nextState(_location);
         return {
-          location: LOCATION_NOT_KEY_TABLE[this._location],
+          location: LOCATION_NOT_KEY_TABLE[_location],
           type: literal as any,
-          index: (this._substate - 1) as any,
+          index: (_substate - 1) as any,
           done: true,
         };
       }
       return {
-        location: LOCATION_NOT_KEY_TABLE[this._location],
+        location: LOCATION_NOT_KEY_TABLE[_location],
         type: literal as any,
-        index: (this._substate - 1) as any,
+        index: (_substate - 1) as any,
       };
     }
-    this._throw(
+    _throw(
       `expected '${dc}' while parsing ${literal}, but got ${formatChar(c)}`
     );
-  }
-  private _handleNumberLiteral(
+  };
+  const _handleNumberLiteral = (
     c: string,
     literal: string,
     subtype: string,
     nextState: ValueState
-  ): TokenInfo.JsonTokenInfo {
-    const dc = literal[this._substate];
+  ): TokenInfo.JsonTokenInfo => {
+    const dc = literal[_substate];
     if (c === dc) {
-      if (++this._substate === literal.length) {
-        this._state = nextState;
-        this._location = this._nextState(this._location);
+      if (++_substate === literal.length) {
+        _state = nextState;
+        _location = _nextState(_location);
         return {
-          location: LOCATION_NOT_KEY_TABLE[this._location],
+          location: LOCATION_NOT_KEY_TABLE[_location],
           type: "number",
           subtype: subtype as any,
-          index: (this._substate - 1) as any,
+          index: (_substate - 1) as any,
           done: true,
         };
       }
       return {
-        location: LOCATION_NOT_KEY_TABLE[this._location],
+        location: LOCATION_NOT_KEY_TABLE[_location],
         type: "number",
         subtype: subtype as any,
-        index: (this._substate - 1) as any,
+        index: (_substate - 1) as any,
       };
     }
-    this._throw(
+    _throw(
       `expected '${dc}' while parsing ${literal}, but got ${formatChar(c)}`
     );
-  }
+  };
 
-  private _stepEmpty(c: string): TokenInfo.JsonTokenInfo {
-    if (isWhitespace(c, this._option.acceptJson5Whitespace)) {
+  const _stepEmpty = (c: string): TokenInfo.JsonTokenInfo => {
+    if (isWhitespace(c, acceptJson5Whitespace)) {
       return {
-        location: LOCATION_TABLE[this._location],
+        location: LOCATION_TABLE[_location],
         type: "whitespace",
       };
     }
-    if (c === EOF) return this._handleEOF();
-    if (c === "/") return this._handleSlash();
-    if (this._location === LocateState.ROOT_END) {
-      this._throw(
-        `unexpected non-whitespace character ${formatChar(c)} after JSON`
-      );
+    if (c === EOF) return _handleEOF();
+    if (c === "/") return _handleSlash();
+    if (_location === LocateState.ROOT_END) {
+      _throw(`unexpected non-whitespace character ${formatChar(c)} after JSON`);
     }
 
     // string
-    if (c === '"' || (c === "'" && this._option.acceptSingleQuote)) {
-      this._state = ValueState.STRING;
-      this._substate2 = c;
+    if (c === '"' || (c === "'" && acceptSingleQuote)) {
+      _state = ValueState.STRING;
+      _substate2 = c;
       return {
-        location: LOCATION_TABLE[this._location],
+        location: LOCATION_TABLE[_location],
         type: "string",
         subtype: "start",
       };
     }
-    if (c === "'") this._throw("single quote not allowed");
+    if (c === "'") _throw("single quote not allowed");
     if (
-      this._location === LocateState.KEY_FIRST_START ||
-      this._location === LocateState.KEY_START
+      _location === LocateState.KEY_FIRST_START ||
+      _location === LocateState.KEY_START
     ) {
-      if (this._option.acceptIdentifierKey)
+      if (acceptIdentifierKey)
         if (isIdentifierStart(c)) {
-          this._state = ValueState.IDENTIFIER;
+          _state = ValueState.IDENTIFIER;
           return {
             location: "key",
             type: "identifier",
             subtype: "normal",
           };
         } else if (c === "\\") {
-          this._state = ValueState.IDENTIFIER_ESCAPE;
-          this._substate = "";
+          _state = ValueState.IDENTIFIER_ESCAPE;
+          _substate = "";
           return {
             location: "key",
             type: "identifier",
@@ -717,38 +722,38 @@ export class JsonStreamParser {
           };
         }
       if (c !== "}") {
-        this._throw("property name must be a string");
+        _throw("property name must be a string");
       }
     }
 
     if (c === ":") {
-      if (this._location === LocateState.KEY_END) {
-        this._location = LocateState.VALUE_START;
-        this._state = ValueState.EMPTY;
+      if (_location === LocateState.KEY_END) {
+        _location = LocateState.VALUE_START;
+        _state = ValueState.EMPTY;
         return {
           location: "object",
           type: "object",
           subtype: "value_start",
         };
       }
-      if (this._location === LocateState.VALUE_START) {
-        this._throw("unexpected repeated colon");
+      if (_location === LocateState.VALUE_START) {
+        _throw("unexpected repeated colon");
       }
-      if (this._location === LocateState.ELEMENT_END) {
-        this._throw("unexpected colon in array");
+      if (_location === LocateState.ELEMENT_END) {
+        _throw("unexpected colon in array");
       }
-      this._throw("unexpected colon");
+      _throw("unexpected colon");
     }
-    if (this._location === LocateState.KEY_END) {
-      this._throw("missing colon between key and value");
+    if (_location === LocateState.KEY_END) {
+      _throw("missing colon between key and value");
     }
 
     switch (c) {
       case "[": {
-        const oldLocation = this._location;
-        this._stack.push(oldLocation);
-        this._location = LocateState.ELEMENT_FIRST_START;
-        this._state = ValueState.EMPTY;
+        const oldLocation = _location;
+        _stack.push(oldLocation);
+        _location = LocateState.ELEMENT_FIRST_START;
+        _state = ValueState.EMPTY;
         return {
           location: LOCATION_NOT_KEY_TABLE[oldLocation],
           type: "array",
@@ -756,13 +761,13 @@ export class JsonStreamParser {
         };
       }
       case "]":
-        return this._handleArrayEnd();
+        return _handleArrayEnd();
 
       case "{": {
-        const oldLocation = this._location;
-        this._stack.push(oldLocation);
-        this._location = LocateState.KEY_FIRST_START;
-        this._state = ValueState.EMPTY;
+        const oldLocation = _location;
+        _stack.push(oldLocation);
+        _location = LocateState.KEY_FIRST_START;
+        _state = ValueState.EMPTY;
         return {
           location: LOCATION_NOT_KEY_TABLE[oldLocation],
           type: "object",
@@ -770,20 +775,19 @@ export class JsonStreamParser {
         };
       }
       case "}":
-        return this._handleObjectEnd();
+        return _handleObjectEnd();
 
       case ",":
-        return this._handleComma();
+        return _handleComma();
 
       case "+":
-        if (!this._option.acceptPositiveSign)
-          this._throw("unexpected '+' sign");
+        if (!acceptPositiveSign) _throw("unexpected '+' sign");
       // fallthrough
       case "-":
-        this._state = ValueState.NUMBER;
-        this._substate = -1;
+        _state = ValueState.NUMBER;
+        _substate = -1;
         return {
-          location: LOCATION_NOT_KEY_TABLE[this._location],
+          location: LOCATION_NOT_KEY_TABLE[_location],
           type: "number",
           subtype: "integer_sign",
         };
@@ -797,41 +801,41 @@ export class JsonStreamParser {
       case "7":
       case "8":
       case "9":
-        this._state = ValueState.NUMBER;
-        this._substate = c === "0" ? 0 : 1;
+        _state = ValueState.NUMBER;
+        _substate = c === "0" ? 0 : 1;
         return {
-          location: LOCATION_NOT_KEY_TABLE[this._location],
+          location: LOCATION_NOT_KEY_TABLE[_location],
           type: "number",
           subtype: "integer_digit",
         };
       case ".":
-        if (this._option.acceptEmptyInteger) {
-          this._state = ValueState.NUMBER_FRACTION;
-          this._substate = false;
+        if (acceptEmptyInteger) {
+          _state = ValueState.NUMBER_FRACTION;
+          _substate = false;
           return {
-            location: LOCATION_NOT_KEY_TABLE[this._location],
+            location: LOCATION_NOT_KEY_TABLE[_location],
             type: "number",
             subtype: "fraction_start",
           };
         }
-        this._throw("unexpected '.' before number");
+        _throw("unexpected '.' before number");
       case "N":
-        if (this._option.acceptNan) {
-          this._state = ValueState.NUMBER_NAN;
-          this._substate = 1;
+        if (acceptNan) {
+          _state = ValueState.NUMBER_NAN;
+          _substate = 1;
           return {
-            location: LOCATION_NOT_KEY_TABLE[this._location],
+            location: LOCATION_NOT_KEY_TABLE[_location],
             type: "number",
             subtype: "nan",
             index: 0,
           };
         }
       case "I":
-        if (this._option.acceptInfinity) {
-          this._state = ValueState.NUMBER_INFINITY;
-          this._substate = 1;
+        if (acceptInfinity) {
+          _state = ValueState.NUMBER_INFINITY;
+          _substate = 1;
           return {
-            location: LOCATION_NOT_KEY_TABLE[this._location],
+            location: LOCATION_NOT_KEY_TABLE[_location],
             type: "number",
             subtype: "infinity",
             index: 0,
@@ -839,69 +843,69 @@ export class JsonStreamParser {
         }
 
       case "n":
-        this._state = ValueState.NULL;
-        this._substate = 1;
+        _state = ValueState.NULL;
+        _substate = 1;
         return {
-          location: LOCATION_NOT_KEY_TABLE[this._location],
+          location: LOCATION_NOT_KEY_TABLE[_location],
           type: "null",
           index: 0,
         };
       case "t":
-        this._state = ValueState.TRUE;
-        this._substate = 1;
+        _state = ValueState.TRUE;
+        _substate = 1;
         return {
-          location: LOCATION_NOT_KEY_TABLE[this._location],
+          location: LOCATION_NOT_KEY_TABLE[_location],
           type: "true",
           index: 0,
         };
       case "f":
-        this._state = ValueState.FALSE;
-        this._substate = 1;
+        _state = ValueState.FALSE;
+        _substate = 1;
         return {
-          location: LOCATION_NOT_KEY_TABLE[this._location],
+          location: LOCATION_NOT_KEY_TABLE[_location],
           type: "false",
           index: 0,
         };
       case "u":
-        this._throw(`"undefined" is not a valid JSON value`);
+        _throw(`"undefined" is not a valid JSON value`);
     }
-    this._throw(`unexpected ${formatChar(c)}`);
-  }
-  private _step(c: string): TokenInfo.JsonTokenInfo {
-    switch (this._state) {
+    _throw(`unexpected ${formatChar(c)}`);
+  };
+  const _step = (c: string): TokenInfo.JsonTokenInfo => {
+    switch (_state) {
       case ValueState.EMPTY:
-        return this._stepEmpty(c);
+        return _stepEmpty(c);
       case ValueState.NULL:
-        return this._handleLiteral(c, "null", ValueState.EMPTY);
+        return _handleLiteral(c, "null", ValueState.EMPTY);
       case ValueState.TRUE:
-        return this._handleLiteral(c, "true", ValueState.EMPTY);
+        return _handleLiteral(c, "true", ValueState.EMPTY);
       case ValueState.FALSE:
-        return this._handleLiteral(c, "false", ValueState.EMPTY);
+        return _handleLiteral(c, "false", ValueState.EMPTY);
       case ValueState.NUMBER_INFINITY:
-        return this._handleNumberLiteral(
+        return _handleNumberLiteral(
           c,
           "Infinity",
           "infinity",
           ValueState.EMPTY
         );
       case ValueState.NUMBER_NAN:
-        return this._handleNumberLiteral(c, "NaN", "nan", ValueState.EMPTY);
+        return _handleNumberLiteral(c, "NaN", "nan", ValueState.EMPTY);
 
       case ValueState.STRING_MULTILINE_CR:
         if (c === "\n") {
-          this._state = ValueState.STRING;
+          _state = ValueState.STRING;
           return {
-            location: LOCATION_TABLE[this._location],
+            location: LOCATION_TABLE[_location],
             type: "string",
             subtype: "next_line",
           };
         }
       // fallthrough
       case ValueState.STRING:
-        if (c === this._substate2) {
-          const oldLocation = this._location;
-          this._location = this._nextState(oldLocation);
-          this._state = ValueState.EMPTY;
+        if (c === _substate2) {
+          const oldLocation = _location;
+          _location = _nextState(oldLocation);
+          _state = ValueState.EMPTY;
           return {
             location: LOCATION_TABLE[oldLocation],
             type: "string",
@@ -909,396 +913,390 @@ export class JsonStreamParser {
           };
         }
         if (c === "\\") {
-          this._state = ValueState.STRING_ESCAPE;
+          _state = ValueState.STRING_ESCAPE;
           return {
-            location: LOCATION_TABLE[this._location],
+            location: LOCATION_TABLE[_location],
             type: "string",
             subtype: "escape_start",
           };
         }
-        if (c === EOF) this._throw("unexpected EOF while parsing string");
+        if (c === EOF) _throw("unexpected EOF while parsing string");
         if (isControl(c))
-          this._throw(`unexpected control character ${formatChar(c)}`);
+          _throw(`unexpected control character ${formatChar(c)}`);
         return {
-          location: LOCATION_TABLE[this._location],
+          location: LOCATION_TABLE[_location],
           type: "string",
           subtype: "normal",
         };
       case ValueState.STRING_ESCAPE:
         if (c === "u") {
-          this._state = ValueState.STRING_UNICODE;
-          this._substate = "";
+          _state = ValueState.STRING_UNICODE;
+          _substate = "";
           return {
-            location: LOCATION_TABLE[this._location],
+            location: LOCATION_TABLE[_location],
             type: "string",
             subtype: "unicode_start",
           };
         }
         const dc = ESCAPE_TABLE[c];
         if (dc !== undefined) {
-          this._state = ValueState.STRING;
+          _state = ValueState.STRING;
           return {
-            location: LOCATION_TABLE[this._location],
+            location: LOCATION_TABLE[_location],
             type: "string",
             subtype: "escape",
             escaped_value: dc as any,
           };
         }
-        if (this._option.acceptMultilineString && isNextLine(c)) {
-          this._state =
+        if (acceptMultilineString && isNextLine(c)) {
+          _state =
             c === "\r" ? ValueState.STRING_MULTILINE_CR : ValueState.STRING;
           return {
-            location: LOCATION_TABLE[this._location],
+            location: LOCATION_TABLE[_location],
             type: "string",
             subtype: "next_line",
           };
         }
-        if (this._option.accpetJson5StringEscape) {
+        if (accpetJson5StringEscape) {
           const dc = ESCAPE_TABLE2[c];
           if (dc !== undefined) {
-            this._state = ValueState.STRING;
+            _state = ValueState.STRING;
             return {
-              location: LOCATION_TABLE[this._location],
+              location: LOCATION_TABLE[_location],
               type: "string",
               subtype: "escape",
               escaped_value: dc as any,
             };
           } else if (c === "x") {
-            this._state = ValueState.STRING_ESCAPE_HEX;
-            this._substate = "";
+            _state = ValueState.STRING_ESCAPE_HEX;
+            _substate = "";
             return {
-              location: LOCATION_TABLE[this._location],
+              location: LOCATION_TABLE[_location],
               type: "string",
               subtype: "escape_hex_start",
             };
           }
         }
-        this._throw(`bad escaped character ${formatChar(c)}`);
+        _throw(`bad escaped character ${formatChar(c)}`);
       case ValueState.STRING_UNICODE:
         if (isHex(c)) {
-          this._substate += c;
-          if (this._substate.length === 4) {
-            this._state = ValueState.STRING;
+          _substate += c;
+          if (_substate.length === 4) {
+            _state = ValueState.STRING;
             return {
-              location: LOCATION_TABLE[this._location],
+              location: LOCATION_TABLE[_location],
               type: "string",
               subtype: "unicode",
               index: 3,
-              escaped_value: String.fromCharCode(parseInt(this._substate, 16)),
+              escaped_value: String.fromCharCode(parseInt(_substate, 16)),
             };
           }
           return {
-            location: LOCATION_TABLE[this._location],
+            location: LOCATION_TABLE[_location],
             type: "string",
             subtype: "unicode",
-            index: (this._substate.length - 1) as 1 | 2,
+            index: (_substate.length - 1) as 1 | 2,
           };
         }
-        this._throw(`bad Unicode escape character ${formatChar(c)}`);
+        _throw(`bad Unicode escape character ${formatChar(c)}`);
       case ValueState.STRING_ESCAPE_HEX:
         if (isHex(c)) {
-          this._substate += c;
-          if (this._substate.length === 2) {
-            this._state = ValueState.STRING;
+          _substate += c;
+          if (_substate.length === 2) {
+            _state = ValueState.STRING;
             return {
-              location: LOCATION_TABLE[this._location],
+              location: LOCATION_TABLE[_location],
               type: "string",
               subtype: "escape_hex",
               index: 1,
-              escaped_value: String.fromCharCode(parseInt(this._substate, 16)),
+              escaped_value: String.fromCharCode(parseInt(_substate, 16)),
             };
           }
           return {
-            location: LOCATION_TABLE[this._location],
+            location: LOCATION_TABLE[_location],
             type: "string",
             subtype: "escape_hex",
             index: 0,
           };
         }
-        this._throw(`bad Hex escape character ${formatChar(c)}`);
+        _throw(`bad Hex escape character ${formatChar(c)}`);
 
       case ValueState.NUMBER:
         if (c === "0") {
-          if (this._substate === 0) this._throw("leading zero not allowed");
-          if (this._substate === -1) this._substate = 0;
+          if (_substate === 0) _throw("leading zero not allowed");
+          if (_substate === -1) _substate = 0;
           return {
-            location: LOCATION_NOT_KEY_TABLE[this._location],
+            location: LOCATION_NOT_KEY_TABLE[_location],
             type: "number",
             subtype: "integer_digit",
           };
         }
         if (c >= "1" && c <= "9") {
-          if (this._substate === 0) this._throw("leading zero not allowed");
-          if (this._substate === -1) this._substate = 1;
+          if (_substate === 0) _throw("leading zero not allowed");
+          if (_substate === -1) _substate = 1;
           return {
-            location: LOCATION_NOT_KEY_TABLE[this._location],
+            location: LOCATION_NOT_KEY_TABLE[_location],
             type: "number",
             subtype: "integer_digit",
           };
         }
         if (c === ".") {
-          if (this._substate === -1 && !this._option.acceptEmptyInteger) {
-            this._throw("unexpected '.' before number");
+          if (_substate === -1 && !acceptEmptyInteger) {
+            _throw("unexpected '.' before number");
           }
-          this._state = ValueState.NUMBER_FRACTION;
-          this._substate = false;
+          _state = ValueState.NUMBER_FRACTION;
+          _substate = false;
           return {
-            location: LOCATION_NOT_KEY_TABLE[this._location],
+            location: LOCATION_NOT_KEY_TABLE[_location],
             type: "number",
             subtype: "fraction_start",
           };
         }
-        if (this._substate === -1) {
-          if (this._option.acceptInfinity && c === "I") {
+        if (_substate === -1) {
+          if (acceptInfinity && c === "I") {
             // "-Infinity"
-            this._state = ValueState.NUMBER_INFINITY;
-            this._substate = 1;
+            _state = ValueState.NUMBER_INFINITY;
+            _substate = 1;
             return {
-              location: LOCATION_NOT_KEY_TABLE[this._location],
+              location: LOCATION_NOT_KEY_TABLE[_location],
               type: "number",
               subtype: "infinity",
               index: 0,
             };
           }
-          this._throw("the integer part cannnot be empty");
+          _throw("the integer part cannnot be empty");
         }
 
-        if (this._substate === 0) {
+        if (_substate === 0) {
           const obj: any = {
-            location: LOCATION_NOT_KEY_TABLE[this._location],
+            location: LOCATION_NOT_KEY_TABLE[_location],
             type: "number",
           };
-          if (
-            this._option.acceptHexadecimalInteger &&
-            (c === "x" || c === "X")
-          ) {
+          if (acceptHexadecimalInteger && (c === "x" || c === "X")) {
             obj.subtype = "hex_start";
-            this._state = ValueState.NUMBER_HEX;
-            this._substate = false;
+            _state = ValueState.NUMBER_HEX;
+            _substate = false;
             return obj;
           }
-          if (this._option.acceptOctalInteger && (c === "o" || c === "O")) {
+          if (acceptOctalInteger && (c === "o" || c === "O")) {
             obj.subtype = "oct_start";
-            this._state = ValueState.NUMBER_OCT;
-            this._substate = false;
+            _state = ValueState.NUMBER_OCT;
+            _substate = false;
             return obj;
           }
-          if (this._option.acceptBinaryInteger && (c === "b" || c === "B")) {
+          if (acceptBinaryInteger && (c === "b" || c === "B")) {
             obj.subtype = "bin_start";
-            this._state = ValueState.NUMBER_BIN;
-            this._substate = false;
+            _state = ValueState.NUMBER_BIN;
+            _substate = false;
             return obj;
           }
         }
 
         if (c === "e" || c === "E") {
-          this._state = ValueState.NUMBER_EXPONENT;
-          this._substate = 0;
+          _state = ValueState.NUMBER_EXPONENT;
+          _substate = 0;
           return {
-            location: LOCATION_NOT_KEY_TABLE[this._location],
+            location: LOCATION_NOT_KEY_TABLE[_location],
             type: "number",
             subtype: "exponent_start",
           };
         }
-        if (isNumberSeparator(c, this._option.acceptJson5Whitespace))
-          return this._handleNumberSeparator(c);
-        this._throw(
+        if (isNumberSeparator(c, acceptJson5Whitespace))
+          return _handleNumberSeparator(c);
+        _throw(
           `unexpected character ${formatChar(
             c
           )} while parsing the integer part of the number`
         );
       case ValueState.NUMBER_FRACTION:
         if (c >= "0" && c <= "9") {
-          this._substate = true;
+          _substate = true;
           return {
-            location: LOCATION_NOT_KEY_TABLE[this._location],
+            location: LOCATION_NOT_KEY_TABLE[_location],
             type: "number",
             subtype: "fraction_digit",
           };
         }
-        if (this._substate === false && !this._option.acceptEmptyFraction) {
-          this._throw("the fraction part cannot be empty");
+        if (_substate === false && !acceptEmptyFraction) {
+          _throw("the fraction part cannot be empty");
         }
 
         if (c === "e" || c === "E") {
-          this._state = ValueState.NUMBER_EXPONENT;
-          this._substate = 0;
+          _state = ValueState.NUMBER_EXPONENT;
+          _substate = 0;
           return {
-            location: LOCATION_NOT_KEY_TABLE[this._location],
+            location: LOCATION_NOT_KEY_TABLE[_location],
             type: "number",
             subtype: "exponent_start",
           };
         }
-        if (isNumberSeparator(c, this._option.acceptJson5Whitespace))
-          return this._handleNumberSeparator(c);
-        this._throw(
+        if (isNumberSeparator(c, acceptJson5Whitespace))
+          return _handleNumberSeparator(c);
+        _throw(
           `unexpected character ${formatChar(
             c
           )} while parsing the fraction part of the number`
         );
       case ValueState.NUMBER_EXPONENT:
         if (c === "+" || c === "-") {
-          if (this._substate === 0) {
-            this._substate = 1;
+          if (_substate === 0) {
+            _substate = 1;
             return {
-              location: LOCATION_NOT_KEY_TABLE[this._location],
+              location: LOCATION_NOT_KEY_TABLE[_location],
               type: "number",
               subtype: "exponent_sign",
             };
-          } else if (this._substate === 1) {
-            this._throw("unexpected repeated sign in exponent part");
-          } else if (this._substate === 2) {
-            this._throw(`unexpected sign ${c} in exponent part`);
+          } else if (_substate === 1) {
+            _throw("unexpected repeated sign in exponent part");
+          } else if (_substate === 2) {
+            _throw(`unexpected sign ${c} in exponent part`);
           }
         }
         if (c >= "0" && c <= "9") {
-          this._substate = 2;
+          _substate = 2;
           return {
-            location: LOCATION_NOT_KEY_TABLE[this._location],
+            location: LOCATION_NOT_KEY_TABLE[_location],
             type: "number",
             subtype: "exponent_digit",
           };
         }
-        if (this._substate === 0 || this._substate === 1) {
-          this._throw("the exponent part cannot be empty");
+        if (_substate === 0 || _substate === 1) {
+          _throw("the exponent part cannot be empty");
         }
 
-        if (isNumberSeparator(c, this._option.acceptJson5Whitespace))
-          return this._handleNumberSeparator(c);
-        this._throw(
+        if (isNumberSeparator(c, acceptJson5Whitespace))
+          return _handleNumberSeparator(c);
+        _throw(
           `unexpected character ${formatChar(
             c
           )} while parsing the exponent part of the number`
         );
       case ValueState.NUMBER_HEX:
         if (isHex(c)) {
-          this._substate = true;
+          _substate = true;
           return {
-            location: LOCATION_NOT_KEY_TABLE[this._location],
+            location: LOCATION_NOT_KEY_TABLE[_location],
             type: "number",
             subtype: "hex",
           };
         }
         if (c === "e" || c === "E")
-          this._throw("exponent not allowed in hexadecimal number");
-        if (c === ".")
-          this._throw("fraction not allowed in hexadecimal number");
-        if (this._substate === false)
-          this._throw("the hexadecimal integer part cannot be empty");
-        if (isNumberSeparator(c, this._option.acceptJson5Whitespace))
-          return this._handleNumberSeparator(c);
-        this._throw(
+          _throw("exponent not allowed in hexadecimal number");
+        if (c === ".") _throw("fraction not allowed in hexadecimal number");
+        if (_substate === false)
+          _throw("the hexadecimal integer part cannot be empty");
+        if (isNumberSeparator(c, acceptJson5Whitespace))
+          return _handleNumberSeparator(c);
+        _throw(
           `unexpected character ${formatChar} while parsing hexadecimal number`
         );
 
       case ValueState.NUMBER_OCT:
         if (c >= "0" && c <= "7") {
-          this._substate = true;
+          _substate = true;
           return {
-            location: LOCATION_NOT_KEY_TABLE[this._location],
+            location: LOCATION_NOT_KEY_TABLE[_location],
             type: "number",
             subtype: "oct",
           };
         }
         if (c === "e" || c === "E")
-          this._throw("exponent not allowed in octal number");
-        if (c === ".") this._throw("fraction not allowed in octal number");
-        if (this._substate === false)
-          this._throw("the octal integer part cannot be empty");
-        if (isNumberSeparator(c, this._option.acceptJson5Whitespace))
-          return this._handleNumberSeparator(c);
-        this._throw(
-          `unexpected character ${formatChar} while parsing octal number`
-        );
+          _throw("exponent not allowed in octal number");
+        if (c === ".") _throw("fraction not allowed in octal number");
+        if (_substate === false)
+          _throw("the octal integer part cannot be empty");
+        if (isNumberSeparator(c, acceptJson5Whitespace))
+          return _handleNumberSeparator(c);
+        _throw(`unexpected character ${formatChar} while parsing octal number`);
 
       case ValueState.NUMBER_BIN:
         if (c === "0" || c === "1") {
-          this._substate = true;
+          _substate = true;
           return {
-            location: LOCATION_NOT_KEY_TABLE[this._location],
+            location: LOCATION_NOT_KEY_TABLE[_location],
             type: "number",
             subtype: "bin",
           };
         }
         if (c === "e" || c === "E")
-          this._throw("exponent not allowed in binary number");
-        if (c === ".") this._throw("fraction not allowed in binary number");
-        if (this._substate === false)
-          this._throw("the binary integer part cannot be empty");
-        if (isNumberSeparator(c, this._option.acceptJson5Whitespace))
-          return this._handleNumberSeparator(c);
-        this._throw(
+          _throw("exponent not allowed in binary number");
+        if (c === ".") _throw("fraction not allowed in binary number");
+        if (_substate === false)
+          _throw("the binary integer part cannot be empty");
+        if (isNumberSeparator(c, acceptJson5Whitespace))
+          return _handleNumberSeparator(c);
+        _throw(
           `unexpected character ${formatChar} while parsing binary number`
         );
 
       case ValueState.COMMENT_MAY_START:
-        if (this._option.acceptSingleLineComment && c === "/") {
-          this._state = ValueState.SINGLE_LINE_COMMENT;
+        if (acceptSingleLineComment && c === "/") {
+          _state = ValueState.SINGLE_LINE_COMMENT;
           return {
-            location: LOCATION_TABLE[this._location],
+            location: LOCATION_TABLE[_location],
             type: "comment",
             subtype: "single_line",
           };
         }
-        if (this._option.accpetMultiLineComment && c === "*") {
-          this._state = ValueState.MULTI_LINE_COMMENT;
+        if (accpetMultiLineComment && c === "*") {
+          _state = ValueState.MULTI_LINE_COMMENT;
           return {
-            location: LOCATION_TABLE[this._location],
+            location: LOCATION_TABLE[_location],
             type: "comment",
             subtype: "multi_line",
           };
         }
-        this._throw("slash is not used for comment");
+        _throw("slash is not used for comment");
       case ValueState.SINGLE_LINE_COMMENT:
-        if (isNextLine(c)) this._state = ValueState.EMPTY;
+        if (isNextLine(c)) _state = ValueState.EMPTY;
         return {
-          location: LOCATION_TABLE[this._location],
+          location: LOCATION_TABLE[_location],
           type: "comment",
           subtype: "single_line",
         };
       case ValueState.MULTI_LINE_COMMENT:
         if (c === "*") {
-          this._state = ValueState.MULTI_LINE_COMMENT_MAY_END;
+          _state = ValueState.MULTI_LINE_COMMENT_MAY_END;
           return {
-            location: LOCATION_TABLE[this._location],
+            location: LOCATION_TABLE[_location],
             type: "comment",
             subtype: "multi_line",
           };
         }
         return {
-          location: LOCATION_TABLE[this._location],
+          location: LOCATION_TABLE[_location],
           type: "comment",
           subtype: "multi_line",
         };
       case ValueState.MULTI_LINE_COMMENT_MAY_END:
         if (c === "/") {
-          this._state = ValueState.EMPTY;
+          _state = ValueState.EMPTY;
           return {
-            location: LOCATION_TABLE[this._location],
+            location: LOCATION_TABLE[_location],
             type: "comment",
             subtype: "multi_line_end",
           };
         }
-        if (c !== "*") this._state = ValueState.MULTI_LINE_COMMENT;
+        if (c !== "*") _state = ValueState.MULTI_LINE_COMMENT;
         return {
-          location: LOCATION_TABLE[this._location],
+          location: LOCATION_TABLE[_location],
           type: "comment",
           subtype: "multi_line",
         };
 
       case ValueState.IDENTIFIER:
         if (c === ":") {
-          this._location = LocateState.VALUE_START;
-          this._state = ValueState.EMPTY;
+          _location = LocateState.VALUE_START;
+          _state = ValueState.EMPTY;
           return {
             location: "object",
             type: "object",
             subtype: "value_start",
           };
         }
-        if (isWhitespace(c, this._option.acceptJson5Whitespace)) {
-          this._state = ValueState.EMPTY;
-          this._location = LocateState.KEY_END;
+        if (isWhitespace(c, acceptJson5Whitespace)) {
+          _state = ValueState.EMPTY;
+          _location = LocateState.KEY_END;
           return {
             location: "key",
             type: "whitespace",
@@ -1306,15 +1304,15 @@ export class JsonStreamParser {
         }
         if (isIdentifierNext(c))
           return { location: "key", type: "identifier", subtype: "normal" };
-        this._throw(
+        _throw(
           `unexpected character ${formatChar(c)} while parsing identifier`
         );
 
       case ValueState.IDENTIFIER_ESCAPE:
-        if (this._substate.length === 0) {
+        if (_substate.length === 0) {
           if (c === "u") {
-            this._state = ValueState.IDENTIFIER_ESCAPE;
-            this._substate = "u";
+            _state = ValueState.IDENTIFIER_ESCAPE;
+            _substate = "u";
             return {
               location: "key",
               type: "identifier",
@@ -1322,22 +1320,22 @@ export class JsonStreamParser {
               index: 1,
             };
           }
-          this._throw(
+          _throw(
             `expected 'u' after '\\' in identifier, but got ${formatChar(c)}`
           );
         }
         if (isHex(c)) {
-          this._substate += c;
-          if (this._substate.length === 5) {
-            this._location = LocateState.KEY_END;
-            this._state = ValueState.EMPTY;
+          _substate += c;
+          if (_substate.length === 5) {
+            _location = LocateState.KEY_END;
+            _state = ValueState.EMPTY;
             return {
               location: "key",
               type: "identifier",
               subtype: "escape",
               index: 3,
               escaped_value: String.fromCharCode(
-                parseInt((this._substate as string).slice(1), 16)
+                parseInt((_substate as string).slice(1), 16)
               ),
             };
           }
@@ -1345,78 +1343,77 @@ export class JsonStreamParser {
             location: "key",
             type: "identifier",
             subtype: "escape",
-            index: (this._substate.length - 2) as 0 | 1 | 2,
+            index: (_substate.length - 2) as 0 | 1 | 2,
           };
         }
-        this._throw(
+        _throw(
           `expected hexadecimal number after '\\u' in identifier, but got ${formatChar(
             c
           )}`
         );
     }
-  }
-  private _checkNextLine(c: string) {
-    if (this._meetCr) {
+  };
+  const _checkNextLine = (c: string) => {
+    if (_meetCr) {
       if (c !== "\n") {
-        ++this._line;
-        this._column = 1;
+        ++_line;
+        _column = 1;
       }
-      this._meetCr = false;
+      _meetCr = false;
     }
-  }
-  private _feed(c: string) {
-    this._checkNextLine(c);
-    const ret = this._step(c);
-    ++this._position;
+  };
+  const _feed = (c: string) => {
+    _checkNextLine(c);
+    const ret = _step(c);
+    ++_position;
     if (isNextLine(c)) {
       if (c === "\r") {
-        ++this._column;
-        this._meetCr = true;
+        ++_column;
+        _meetCr = true;
       } else {
-        ++this._line;
-        this._column = 1;
+        ++_line;
+        _column = 1;
       }
-    } else if (c !== EOF) ++this._column;
+    } else if (c !== EOF) ++_column;
     return ret;
-  }
+  };
 
-  constructor(option: JsonOption = {}) {
-    this._option = Object.freeze(Object.assign({}, option));
-  }
-  feed(s: string): JsonToken[] {
-    const ret: JsonToken[] = [];
-    for (const c of s) {
-      const info: any = this._feed(c);
-      info.character = c;
-      ret.push(info);
-    }
-    return ret;
-  }
-  end(): JsonToken {
-    const info: any = this._feed(EOF);
-    info.character = EOF;
-    return info;
-  }
+  return {
+    feed(s: string): JsonToken[] {
+      const ret: JsonToken[] = [];
+      for (const c of s) {
+        const info: any = _feed(c);
+        info.character = c;
+        ret.push(info);
+      }
+      return ret;
+    },
+    end(): JsonToken {
+      const info: any = _feed(EOF);
+      info.character = EOF;
+      return info;
+    },
 
-  get position() {
-    return this._position;
-  }
-  get line() {
-    return this._line;
-  }
-  get column() {
-    return this._column;
-  }
+    get position() {
+      return _position;
+    },
+    get line() {
+      return _line;
+    },
+    get column() {
+      return _column;
+    },
+  };
 }
 
 export function jsonStreamParse(s: string, option?: JsonOption) {
-  const parser = new JsonStreamParser(option);
+  const parser = createJsonStreamParser(option);
   const ret = parser.feed(s);
   parser.end();
   return ret;
 }
 export function* jsonStreamGenerator(s: Iterable<string>, option?: JsonOption) {
-  const parser = new JsonStreamParser(option);
+  const parser = createJsonStreamParser(option);
   for (const chunk of s) yield* parser.feed(chunk);
   yield parser.end();
 }
@@ -1572,31 +1569,30 @@ namespace EventState {
 /**
  * Input tokens and emit events
  */
-export class JsonEventEmiiter {
-  private readonly _state: EventState._State[];
+export function createJsonEventEmitter(receiver: JsonEventReceiver) {
+  const _state: EventState._State[] = [{ _receiver: receiver }];
 
-  private _throw(msg: string) {
+  function _throw(msg: string): never {
     throw new JsonEventParserError(`JsonEventParser Error - ${msg}`);
   }
 
-  private _endValue(value: JsonValue): void {
-    this._state.pop()!._receiver.end?.();
-    if (this._state.length !== 0) {
-      (this._state[this._state.length - 1] as EventState._Struct)._child =
-        value;
+  const _endValue = (value: JsonValue): void => {
+    _state.pop()!._receiver.end?.();
+    if (_state.length !== 0) {
+      (_state[_state.length - 1] as EventState._Struct)._child = value;
     }
-  }
-  private _needSave() {
+  };
+  const _needSave = () => {
     return (
-      this._state.length >= 2 &&
-      (this._state[this._state.length - 2] as EventState._Struct)._saveChild
+      _state.length >= 2 &&
+      (_state[_state.length - 2] as EventState._Struct)._saveChild
     );
-  }
+  };
 
-  private _feedStateless(
+  const _feedStateless = (
     token: JsonToken & { type: "true" | "false" | "null" }
-  ) {
-    const state = this._state[this._state.length - 1] as EventState._StateLess;
+  ) => {
+    const state = _state[_state.length - 1] as EventState._StateLess;
     if (state._type === undefined) {
       state._type = token.type;
       state._receiver.start?.();
@@ -1605,32 +1601,32 @@ export class JsonEventEmiiter {
     if (token.done) {
       if (token.type === "null") {
         (state._receiver as any).save?.(null);
-        return this._endValue(null);
+        return _endValue(null);
       } else if (token.type === "true") {
         (state._receiver as any).save?.(true);
-        return this._endValue(true);
+        return _endValue(true);
       } else if (token.type === "false") {
         (state._receiver as any).save?.(false);
-        return this._endValue(false);
+        return _endValue(false);
       }
     }
-  }
-  private _feedNumber(token: JsonToken & { type: "number" }) {
-    const state = this._state[this._state.length - 1] as EventState._Number;
+  };
+  const _feedNumber = (token: JsonToken & { type: "number" }) => {
+    const state = _state[_state.length - 1] as EventState._Number;
     if (state._type === undefined) {
       state._type = "number";
-      state._save = this._needSave() || state._receiver.save !== undefined;
+      state._save = _needSave() || state._receiver.save !== undefined;
       state._list = [];
       state._receiver.start?.();
     }
     state._receiver.feed?.(token);
     state._list.push(token.character);
-  }
-  private _feedString(token: JsonToken & { type: "string" }) {
-    const state = this._state[this._state.length - 1] as EventState._String;
+  };
+  const _feedString = (token: JsonToken & { type: "string" }) => {
+    const state = _state[_state.length - 1] as EventState._String;
     if (state._type === undefined) {
       state._type = "string";
-      state._save = this._needSave() || state._receiver.save !== undefined;
+      state._save = _needSave() || state._receiver.save !== undefined;
       state._list = [];
       state._receiver.start?.();
     }
@@ -1651,14 +1647,14 @@ export class JsonEventEmiiter {
       state._receiver.end?.();
       const str = state._list.join("");
       state._receiver.save?.(str);
-      this._endValue(str);
+      _endValue(str);
     }
-  }
-  private _feedIdentifier(token: JsonToken & { type: "identifier" }) {
-    const state = this._state[this._state.length - 1] as EventState._String;
+  };
+  const _feedIdentifier = (token: JsonToken & { type: "identifier" }) => {
+    const state = _state[_state.length - 1] as EventState._String;
     if (state._type === undefined) {
       state._type = "string";
-      state._save = this._needSave() || state._receiver.save !== undefined;
+      state._save = _needSave() || state._receiver.save !== undefined;
       state._list = [];
       state._receiver.start?.();
       state._isIdentifier = true;
@@ -1703,16 +1699,16 @@ export class JsonEventEmiiter {
         if (state._save) state._list.push(token.escaped_value);
       }
     }
-  }
-  private _feedObject(token: JsonToken & { type: "object" }) {
-    let state = this._state[this._state.length - 1] as EventState._Object;
+  };
+  const _feedObject = (token: JsonToken & { type: "object" }) => {
+    let state = _state[_state.length - 1] as EventState._Object;
     if (state._type === undefined) {
       if (token.subtype === "end") {
-        this._state.pop();
-        state = this._state[this._state.length - 1] as EventState._Object;
+        _state.pop();
+        state = _state[_state.length - 1] as EventState._Object;
       } else {
         state._type = "object";
-        state._save = this._needSave() || state._receiver.save !== undefined;
+        state._save = _needSave() || state._receiver.save !== undefined;
         state._saveValue = state._save || state._receiver.set !== undefined;
         state._saveKey =
           state._saveValue ||
@@ -1724,7 +1720,7 @@ export class JsonEventEmiiter {
 
         state._receiver.start?.();
         state._receiver.feed?.(token);
-        this._state.push({
+        _state.push({
           _type: undefined,
           _receiver: state._receiver.keyReceiver ?? { type: "any" },
         });
@@ -1740,7 +1736,7 @@ export class JsonEventEmiiter {
         state._receiver.set?.(state._key, state._child!);
       }
       state._receiver.save?.(state._object);
-      return this._endValue(state._object);
+      return _endValue(state._object);
     }
     if (token.subtype === "next") {
       if (state._save) state._object[state._key!] = state._child!;
@@ -1748,7 +1744,7 @@ export class JsonEventEmiiter {
 
       state._saveChild = state._saveKey;
       state._key = state._child = undefined;
-      this._state.push({
+      _state.push({
         _type: undefined,
         _receiver: state._receiver.keyReceiver ?? { type: "any" },
       });
@@ -1769,23 +1765,23 @@ export class JsonEventEmiiter {
           if (receiver !== undefined) break;
         }
       }
-      this._state.push({
+      _state.push({
         _type: undefined,
         _receiver: receiver ?? { type: "any" },
       });
       return;
     }
-  }
-  private _feedArray(token: JsonToken & { type: "array" }): void {
-    let state = this._state[this._state.length - 1] as EventState._Array;
+  };
+  const _feedArray = (token: JsonToken & { type: "array" }): void => {
+    let state = _state[_state.length - 1] as EventState._Array;
     if (state._type === undefined) {
       if (token.subtype === "end") {
         // trailing comma
-        this._state.pop();
-        state = this._state[this._state.length - 1] as EventState._Array;
+        _state.pop();
+        state = _state[_state.length - 1] as EventState._Array;
       } else {
         state._type = "array";
-        state._save = this._needSave() || state._receiver.save !== undefined;
+        state._save = _needSave() || state._receiver.save !== undefined;
         state._saveChild = state._save || state._receiver.set !== undefined;
         state._index = 0;
         state._array = [];
@@ -1799,7 +1795,7 @@ export class JsonEventEmiiter {
             receiver = func(state._index);
             if (receiver === undefined) break;
           }
-        this._state.push({
+        _state.push({
           _type: undefined,
           _receiver: receiver ?? { type: "any" },
         });
@@ -1814,7 +1810,7 @@ export class JsonEventEmiiter {
         state._receiver.set?.(state._index, state._child!);
       }
       state._receiver.save?.(state._array);
-      return this._endValue(state._array);
+      return _endValue(state._array);
     }
 
     // next element
@@ -1830,118 +1826,120 @@ export class JsonEventEmiiter {
         receiver = func(state._index);
         if (receiver !== undefined) break;
       }
-    this._state.push({
+    _state.push({
       _type: undefined,
       _receiver: receiver ?? { type: "any" },
     });
     return;
-  }
+  };
 
-  constructor(receiver: JsonEventReceiver) {
-    this._state = [{ _receiver: receiver }];
-  }
-  feed(token: JsonToken) {
-    if (
-      token.type === "whitespace" ||
-      token.type === "comment" ||
-      token.type === "eof"
-    )
-      return;
+  return {
+    feed(token: JsonToken) {
+      if (
+        token.type === "whitespace" ||
+        token.type === "comment" ||
+        token.type === "eof"
+      )
+        return;
 
-    let state = this._state[this._state.length - 1];
-    if (state._type === "number" && token.type !== "number") {
-      const str = (state as EventState._Number)._list.join("");
-      let val: number;
-      if (str[0] === "0") {
-        /* compatible with JSON5 */
-        switch (str[1]) {
-          case "x":
-          case "X":
-            val = parseInt(str.slice(2), 16);
-          case "o":
-          case "O":
-            val = parseInt(str.slice(2), 8);
-          case "b":
-          case "B":
-            val = parseInt(str.slice(2), 2);
-          default:
-            val = parseFloat(str);
-        }
-      } else val = parseFloat(str);
-      (state as EventState._Number)._receiver.save?.(val);
-      this._endValue(val);
-      state = this._state[this._state.length - 1];
-    }
-    if (
-      state._type === "string" &&
-      (state as EventState._String)._isIdentifier &&
-      token.type !== "identifier"
-    ) {
-      (state._receiver as any).feed?.({
-        location: "key",
-        type: "string",
-        subtype: "end",
-        character: '"',
-      });
-      state._receiver.end?.();
-      const str = (state as EventState._String)._list.join("");
-      (state as EventState._String)._receiver.save?.(str);
-      this._endValue(str);
-      state = this._state[this._state.length - 1];
-    }
+      let state = _state[_state.length - 1];
+      if (state._type === "number" && token.type !== "number") {
+        const str = (state as EventState._Number)._list.join("");
+        let val: number;
+        if (str[0] === "0") {
+          /* compatible with JSON5 */
+          switch (str[1]) {
+            case "x":
+            case "X":
+              val = parseInt(str.slice(2), 16);
+            case "o":
+            case "O":
+              val = parseInt(str.slice(2), 8);
+            case "b":
+            case "B":
+              val = parseInt(str.slice(2), 2);
+            default:
+              val = parseFloat(str);
+          }
+        } else val = parseFloat(str);
+        (state as EventState._Number)._receiver.save?.(val);
+        _endValue(val);
+        state = _state[_state.length - 1];
+      }
+      if (
+        state._type === "string" &&
+        (state as EventState._String)._isIdentifier &&
+        token.type !== "identifier"
+      ) {
+        (state._receiver as any).feed?.({
+          location: "key",
+          type: "string",
+          subtype: "end",
+          character: '"',
+        });
+        state._receiver.end?.();
+        const str = (state as EventState._String)._list.join("");
+        (state as EventState._String)._receiver.save?.(str);
+        _endValue(str);
+        state = _state[_state.length - 1];
+      }
 
-    if (state._receiver.type !== "any" && token.type !== state._receiver.type) {
-      if (!(token.type === "identifier" && state._receiver.type === "string"))
-        this._throw(`expected ${state._receiver.type} but got ${token.type}`);
-    }
+      if (
+        state._receiver.type !== "any" &&
+        token.type !== state._receiver.type
+      ) {
+        if (!(token.type === "identifier" && state._receiver.type === "string"))
+          _throw(`expected ${state._receiver.type} but got ${token.type}`);
+      }
 
-    switch (token.type) {
-      case "null":
-      case "true":
-      case "false":
-        return this._feedStateless(token);
+      switch (token.type) {
+        case "null":
+        case "true":
+        case "false":
+          return _feedStateless(token);
 
-      case "number":
-        return this._feedNumber(token);
-      case "string":
-        return this._feedString(token);
-      case "identifier":
-        return this._feedIdentifier(token);
+        case "number":
+          return _feedNumber(token);
+        case "string":
+          return _feedString(token);
+        case "identifier":
+          return _feedIdentifier(token);
 
-      case "object":
-        return this._feedObject(token);
-      case "array":
-        return this._feedArray(token);
-    }
-  }
+        case "object":
+          return _feedObject(token);
+        case "array":
+          return _feedArray(token);
+      }
+    },
+  };
 }
 
 /**
  * Input JSON string and emit events (equivalent to combine `JsonStreamParser` and `JsonEventEmiiter`)
  */
-export class JsonEventParser {
-  private readonly _parser: JsonStreamParser;
-  private readonly _emitter: JsonEventEmiiter;
-
-  constructor(receiver: JsonEventReceiver, option?: JsonOption) {
-    this._parser = new JsonStreamParser(option);
-    this._emitter = new JsonEventEmiiter(receiver);
-  }
-  feed(s: string) {
-    const tokens = this._parser.feed(s);
-    for (const token of tokens) this._emitter.feed(token);
-  }
-  end() {
-    this._emitter.feed(this._parser.end());
-  }
-}
+export const createJsonEventParser = (
+  receiver: JsonEventReceiver,
+  option?: JsonOption
+) => {
+  const _parser = createJsonStreamParser(option);
+  const _emitter = createJsonEventEmitter(receiver);
+  return {
+    feed(s: string) {
+      const tokens = _parser.feed(s);
+      for (const token of tokens) _emitter.feed(token);
+    },
+    end() {
+      _emitter.feed(_parser.end());
+    },
+  };
+};
 
 export function jsonEventParse(
   s: string,
   receiver: JsonEventReceiver,
   option?: JsonOption
 ) {
-  const parser = new JsonEventParser(receiver, option);
+  const parser = createJsonEventParser(receiver, option);
   parser.feed(s);
   parser.end();
 }

@@ -1,7 +1,7 @@
-import { JsonStreamParser } from "../efjson";
+import { createJsonStreamParser } from "../efjson";
 
 const getPosInfo = (s: string) => {
-  const parser = new JsonStreamParser();
+  const parser = createJsonStreamParser();
   parser.feed(s);
   return {
     line: parser.line,
