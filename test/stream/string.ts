@@ -3,7 +3,7 @@ import {
   combineCall,
   makeRejectedTestcases,
   runTestCases,
-} from "./util";
+} from "../util";
 
 const testcases: (string | [string])[] = [
   ['""'],

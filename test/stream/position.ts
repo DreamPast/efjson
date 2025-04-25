@@ -1,4 +1,4 @@
-import { createJsonStreamParser } from "../efjson";
+import { createJsonStreamParser } from "../../efjson";
 
 const getPosInfo = (s: string) => {
   const parser = createJsonStreamParser();
