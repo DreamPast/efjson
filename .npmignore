@@ -7,3 +7,4 @@ test/*
 efjson.ts
 
 *.tgz
+tsconfig.json
