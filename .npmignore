@@ -1,10 +1,6 @@
+*
 !dist/*
-.vscode/*
-
-doc/*
-example/*
-test/*
-efjson.ts
-
-*.tgz
-tsconfig.json
+!LICENSE
+!package.json
+!README_zh_CN.md
+!README.md
