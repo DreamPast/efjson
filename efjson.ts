@@ -1865,8 +1865,7 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
         (state as EventState._Number)._receiver.save?.(val);
         _endValue(val);
         state = _state[_state.length - 1];
-      }
-      if (
+      } else if (
         state._type === "string" &&
         (state as EventState._String)._isIdentifier &&
         token.type !== "identifier"
@@ -1882,7 +1881,17 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
         (state as EventState._String)._receiver.save?.(str);
         _endValue(str);
         state = _state[_state.length - 1];
-      }
+      } else if (state._type === undefined)
+        if ((token as any).subtype === "end") {
+          // trailing comma
+          if (token.type === "array") {
+            _state.pop();
+            state = _state[_state.length - 1];
+          } else if (token.type === "object") {
+            _state.pop();
+            state = _state[_state.length - 1];
+          }
+        }
 
       if (
         state._receiver.type !== "any" &&
