@@ -112,6 +112,10 @@ const enum LocateState {
   ELEMENT_FIRST_START, // used to check trailling comma
   ELEMENT_START,
   ELEMENT_END,
+
+  /* JSON5 */
+  EMPTY_OBJECT,
+  EMPTY_ARRAY,
 }
 
 // TODO: compatible with JSON5
@@ -380,8 +384,12 @@ namespace TokenInfo {
     | { location: "root"; type: "eof" }
     | ({ location: _NotKeyLocation } & _NotKey)
     | ({ location: "key" } & (_String | _Identifier))
-    | { location: "object"; type: "object"; subtype: "value_start" | "next" }
-    | { location: "array"; type: "array"; subtype: "next" };
+    | {
+        location: "object";
+        type: "object";
+        subtype: "value_start" | "next" | "empty_next";
+      }
+    | { location: "array"; type: "array"; subtype: "next" | "empty_next" };
 }
 export type JsonToken = TokenInfo.JsonTokenInfo & { character: string };
 
@@ -528,8 +536,13 @@ export function createJsonStreamParser(option?: JsonOption) {
     }
     if (_location === LocateState.KEY_FIRST_START)
       _throw("extra commas not allowed in object");
-    if (_location === LocateState.ELEMENT_FIRST_START)
+    if (_location === LocateState.ELEMENT_FIRST_START) {
+      if (acceptTrailingCommaInArray) {
+        _location = LocateState.EMPTY_ARRAY;
+        return { location: "array", type: "array", subtype: "empty_next" };
+      }
       _throw("extra commas not allowed in array");
+    }
     if (_location === LocateState.VALUE_START) _throw("unpexted empty value");
     _throw("unexpected comma");
   };
@@ -583,11 +596,13 @@ export function createJsonStreamParser(option?: JsonOption) {
       case LocateState.KEY_END:
       case LocateState.VALUE_START:
       case LocateState.VALUE_END:
+      case LocateState.EMPTY_OBJECT:
         _throw("unexpected EOF while parsing object");
 
       case LocateState.ELEMENT_FIRST_START:
       case LocateState.ELEMENT_START:
       case LocateState.ELEMENT_END:
+      case LocateState.EMPTY_ARRAY:
         _throw("unexpected EOF while parsing array");
     }
   };
@@ -687,6 +702,34 @@ export function createJsonStreamParser(option?: JsonOption) {
     if (_location === LocateState.ROOT_END) {
       _throw(`unexpected non-whitespace character ${formatChar(c)} after JSON`);
     }
+    if (_location === LocateState.EMPTY_ARRAY) {
+      if (c === "]") {
+        _state = ValueState.EMPTY;
+        _location = _nextState(_stack.pop()!);
+        return {
+          location: "array",
+          type: "array",
+          subtype: "end",
+        };
+      }
+      _throw(
+        "the first comma is treated as a trailing comma, more elements are not allowed"
+      );
+    }
+    if (_location === LocateState.EMPTY_OBJECT) {
+      if (c === "}") {
+        _state = ValueState.EMPTY;
+        _location = _nextState(_stack.pop()!);
+        return {
+          location: "object",
+          type: "object",
+          subtype: "end",
+        };
+      }
+      _throw(
+        "the first comma is treated as a trailing comma, more properties are not allowed"
+      );
+    }
 
     // string
     if (c === '"' || (c === "'" && acceptSingleQuote)) {
@@ -721,9 +764,19 @@ export function createJsonStreamParser(option?: JsonOption) {
             index: 0,
           };
         }
-      if (c !== "}") {
-        _throw("property name must be a string");
+      if (
+        _location === LocateState.KEY_FIRST_START &&
+        c === "," &&
+        acceptTrailingCommaInObject
+      ) {
+        _location = LocateState.EMPTY_OBJECT;
+        return {
+          location: "object",
+          type: "object",
+          subtype: "empty_next",
+        };
       }
+      if (c !== "}") _throw("property name must be a string");
     }
 
     if (c === ":") {
@@ -1702,6 +1755,11 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
   };
   const _feedObject = (token: JsonToken & { type: "object" }) => {
     let state = _state[_state.length - 1] as EventState._Object;
+    if (token.subtype === "empty_next") {
+      _state.pop();
+      return;
+    }
+
     if (state._type === undefined) {
       if (token.subtype === "end") {
         _state.pop();
@@ -1774,6 +1832,13 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
   };
   const _feedArray = (token: JsonToken & { type: "array" }): void => {
     let state = _state[_state.length - 1] as EventState._Array;
+    if (token.subtype === "empty_next") {
+      _state.pop();
+      state = _state[_state.length - 1] as EventState._Array;
+      state._receiver.next?.(state._index + 1);
+      return;
+    }
+
     if (state._type === undefined) {
       if (token.subtype === "end") {
         // trailing comma
@@ -1895,10 +1960,15 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
 
       if (
         state._receiver.type !== "any" &&
+        state._type !== undefined &&
         token.type !== state._receiver.type
       ) {
-        if (!(token.type === "identifier" && state._receiver.type === "string"))
-          _throw(`expected ${state._receiver.type} but got ${token.type}`);
+        if (state._receiver.type === "string" && token.type === "identifier") {
+        } else if (
+          state._receiver.type === "boolean" &&
+          (token.type === "true" || token.type === "false")
+        ) {
+        } else _throw(`expected ${state._receiver.type} but got ${token.type}`);
       }
 
       switch (token.type) {

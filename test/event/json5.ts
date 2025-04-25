@@ -12,6 +12,7 @@ No \\\\n's! \\x40",
   "leadingDecimalPoint": .8675309, "andTrailing": 8675309.,
   "positiveSign": +1,
   "trailingComma": 'in objects', "andIn": ['arrays',],
+  "dict": { string: 'string', number: 12, boolean: true, null: null, array: [,], object: {,} },
   "backwardsCompatible": "with JSON",
   "nan": NaN,
   "infinity": \u3000 [Infinity, -Infinity],
@@ -40,6 +41,11 @@ jsonEventParse(
             subscribeList: [
               () => ({ type: key === "andIn" ? "string" : "number" }),
             ],
+          };
+        } else if (key === "dict") {
+          return {
+            type: "object",
+            subscribeList: [(k) => ({ type: k as any })],
           };
         } else {
           return { type: "string" };
