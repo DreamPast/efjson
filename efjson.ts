@@ -1790,14 +1790,8 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
 
   return {
     feed(token: JsonToken) {
-      if (
-        token.type === "whitespace" ||
-        token.type === "comment" ||
-        token.type === "eof"
-      )
-        return;
-
       let state = _state[_state.length - 1];
+      if (state === undefined) return;
       if (state._type === "number" && token.type !== "number") {
         const str = (state as EventState._Number)._list.join("");
         let val: number;
@@ -1850,6 +1844,12 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
             state = _state[_state.length - 1];
           }
         }
+      if (
+        token.type === "whitespace" ||
+        token.type === "comment" ||
+        token.type === "eof"
+      )
+        return;
 
       if (
         state._receiver.type !== "any" &&

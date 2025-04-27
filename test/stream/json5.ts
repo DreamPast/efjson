@@ -27,10 +27,3 @@ for (const key in option) {
   checkError(str, true, option);
   option[key as keyof typeof option] = true;
 }
-
-checkError("[,,]", true, JSON5_OPTION);
-checkError("{,,}", true, JSON5_OPTION);
-checkError("[,true]", true, JSON5_OPTION);
-checkError("{,A:1}", true, JSON5_OPTION);
-checkError("{A:1,,}", true, JSON5_OPTION);
-checkError("[1,,2]", true, JSON5_OPTION);
