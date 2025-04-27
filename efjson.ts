@@ -857,6 +857,7 @@ export function createJsonStreamParser(option?: JsonOption) {
           token.done = undefined;
           return;
         }
+        break;
       case "I":
         if (acceptInfinity) {
           _state = ValueState.NUMBER_INFINITY;
@@ -867,6 +868,7 @@ export function createJsonStreamParser(option?: JsonOption) {
           token.done = undefined;
           return;
         }
+        break;
 
       case "n":
         _state = ValueState.NULL;
@@ -954,13 +956,15 @@ export function createJsonStreamParser(option?: JsonOption) {
           token.subtype = "unicode_start";
           return;
         }
-        const dc = ESCAPE_TABLE[c];
-        if (dc !== undefined) {
-          _state = ValueState.STRING;
-          token.type = "string";
-          token.subtype = "escape";
-          token.escaped_value = dc;
-          return;
+        {
+          const dc = ESCAPE_TABLE[c];
+          if (dc !== undefined) {
+            _state = ValueState.STRING;
+            token.type = "string";
+            token.subtype = "escape";
+            token.escaped_value = dc;
+            return;
+          }
         }
         if (acceptMultilineString && isNextLine(c)) {
           _state =
@@ -1803,12 +1807,15 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
             case "x":
             case "X":
               val = parseInt(str.slice(2), 16);
+              break;
             case "o":
             case "O":
               val = parseInt(str.slice(2), 8);
+              break;
             case "b":
             case "B":
               val = parseInt(str.slice(2), 2);
+              break;
             default:
               val = parseFloat(str);
           }
@@ -1850,10 +1857,12 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
         token.type !== state._receiver.type
       ) {
         if (state._receiver.type === "string" && token.type === "identifier") {
+          // empty
         } else if (
           state._receiver.type === "boolean" &&
           (token.type === "true" || token.type === "false")
         ) {
+          // empty
         } else _throw(`expected ${state._receiver.type} but got ${token.type}`);
       }
 
