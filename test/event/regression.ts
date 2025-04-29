@@ -1,4 +1,5 @@
 import { jsonEventParse, JsonOption } from "../../efjson";
+import { assertEq } from "../util";
 {
   const option: JsonOption = {
     acceptOctalInteger: true,
@@ -13,12 +14,12 @@ import { jsonEventParse, JsonOption } from "../../efjson";
         type: "number",
         save(num) {
           done = true;
-          console.assert(num === 0x12, `expected 0x12 but got ${num}`);
+          assertEq(num, 0x12);
         },
       },
       option
     );
-    console.assert(done, "save not called");
+    assertEq(done, true);
   }
   {
     let done = false;
@@ -28,12 +29,12 @@ import { jsonEventParse, JsonOption } from "../../efjson";
         type: "number",
         save(num) {
           done = true;
-          console.assert(num === 0o12, `expected 0o12 but got ${num}`);
+          assertEq(num, 0o12);
         },
       },
       option
     );
-    console.assert(done, "save not called");
+    assertEq(done, true);
   }
   {
     let done = false;
@@ -43,11 +44,11 @@ import { jsonEventParse, JsonOption } from "../../efjson";
         type: "number",
         save(num) {
           done = true;
-          console.assert(num === 0b10110, `expected 0b10110 but got ${num}`);
+          assertEq(num, 0b10110);
         },
       },
       option
     );
-    console.assert(done, "save not called");
+    assertEq(done, true);
   }
 }

@@ -6,3 +6,4 @@ import "./stream/regression";
 
 import "./event/json5";
 import "./event/regression";
+import "./event/any";

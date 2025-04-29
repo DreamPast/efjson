@@ -65,11 +65,10 @@ const ESCAPE_TABLE2: { [k: string]: string | undefined } = {
 };
 
 const formatChar = (c: string) => {
-  const code = c.charCodeAt(0);
+  const code = c.codePointAt(0)!;
   if (code === 0) return "EOF";
-  if (code >= 0x20 && code < 0x7f) return `'${c}'`;
-  const str = code.toString(16);
-  return `\\u${"0".repeat(4 - str.length)}${str}`;
+  if (/\P{C}/u.test(c)) return `'${c}'`;
+  return `U+${code.toString(16).toUpperCase()}`;
 };
 
 const enum ValueState {
@@ -395,7 +394,7 @@ namespace TokenInfo {
         type: "object";
         subtype: "empty_next";
       }
-    | { location: "array"; type: "array"; subtype: "next" | "empty_next" }
+    | { location: "array"; type: "array"; subtype: "next" }
     /* JSON5 */
     | { location: "array"; type: "array"; subtype: "empty_next" };
 }
@@ -1382,6 +1381,20 @@ export type JsonEventAnyReceiver = {
   end?: () => void;
   feed?: (token: JsonToken) => void;
   save?: (val: JsonValue) => void;
+
+  /**
+   * After obtaining a specific type, it can be transformed into other types of receivers.
+   * If the sub-receiver lacks methods like `start`, `end`, `feed`, or `save`,
+   * it will attempt to inherit them from the parent receiver.
+   */
+  dict?: {
+    null?: JsonEventNullReceiver;
+    boolean?: JsonEventBooleanReceiver;
+    number?: JsonEventNumberReceiver;
+    string?: JsonEventStringReceiver;
+    object?: JsonEventObjectReceiver;
+    array?: JsonEventArrayReceiver;
+  };
 };
 export type JsonEventNullReceiver = {
   type: "null";
@@ -1851,20 +1864,32 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
       )
         return;
 
-      if (
-        state._receiver.type !== "any" &&
-        state._type !== undefined &&
-        token.type !== state._receiver.type
-      ) {
-        if (state._receiver.type === "string" && token.type === "identifier") {
-          // empty
-        } else if (
-          state._receiver.type === "boolean" &&
-          (token.type === "true" || token.type === "false")
-        ) {
-          // empty
-        } else _throw(`expected ${state._receiver.type} but got ${token.type}`);
+      const tokenCastType =
+        token.type === "true" || token.type === "false"
+          ? "boolean"
+          : token.type === "identifier"
+          ? "string"
+          : token.type;
+      if (state._type === undefined && state._receiver.type === "any") {
+        const anyReceiver = state._receiver;
+        const subReceiver: JsonEventReceiver | undefined =
+          anyReceiver.dict?.[tokenCastType];
+        if (subReceiver === undefined) {
+          state._receiver = { ...anyReceiver, type: tokenCastType };
+        } else {
+          const newReceiver = { ...subReceiver };
+          if (newReceiver.start === undefined)
+            newReceiver.start = anyReceiver.start;
+          if (newReceiver.feed === undefined)
+            newReceiver.feed = anyReceiver.feed;
+          if (newReceiver.end === undefined) newReceiver.end = anyReceiver.end;
+          if (newReceiver.save === undefined)
+            newReceiver.save = anyReceiver.save;
+          state._receiver = newReceiver;
+        }
       }
+      if (tokenCastType !== state._receiver.type)
+        _throw(`expected ${state._receiver.type} but got ${token.type}`);
 
       switch (token.type) {
         case "null":

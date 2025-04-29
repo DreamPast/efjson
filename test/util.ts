@@ -1,5 +1,9 @@
 import { JsonOption, JsonStreamParserError, jsonStreamParse } from "../efjson";
 
+export const assertEq = (got: any, expect: any) => {
+  if (got !== expect) throw new Error(`expected ${expect} but got ${got}`);
+};
+
 export const checkError = (
   s: string,
   expected_error = true,
@@ -18,7 +22,7 @@ export const checkError = (
     else return undefined;
   } catch (e) {
     console.log(s);
-    console.log(option)
+    console.log(option);
     throw e;
   }
 };
