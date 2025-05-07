@@ -1,5 +1,7 @@
 # The Diagram of JSON Token State Transition
 
+![merged](./assets/merged.svg)
+
 ## null/true/false
 
 ![null/true/false](./assets/null-true-false.svg)
