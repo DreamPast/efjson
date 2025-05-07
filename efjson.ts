@@ -442,7 +442,20 @@ export class JsonStreamParserError extends JsonParserError {
   }
 }
 
-function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
+export interface JsonStreamParser {
+  feedOneTo: (token: JsonToken, c: string) => JsonToken;
+  feed(s: string): JsonToken[];
+  end(): JsonToken;
+  get position(): number;
+  get line(): number;
+  get column(): number;
+  copy(): JsonStreamParser;
+}
+
+function createJsonStreamParserInternal(
+  option?: JsonOption,
+  init?: any[]
+): JsonStreamParser {
   const acceptJson5Whitespace = option?.acceptJson5Whitespace;
   const acceptTrailingCommaInArray = option?.acceptTrailingCommaInArray;
   const acceptTrailingCommaInObject = option?.acceptTrailingCommaInObject;
