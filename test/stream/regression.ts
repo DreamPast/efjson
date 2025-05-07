@@ -10,3 +10,5 @@ checkError("[1,,2]", true, JSON5_OPTION);
 
 checkError("Iull", true, { acceptNan: true });
 checkError("Nnfinity", true, { acceptInfinity: true });
+
+checkError("\0", true);

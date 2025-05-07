@@ -101,6 +101,7 @@ const enum ValueState {
 }
 
 const enum LocateState {
+  EOF,
   ROOT_START,
   ROOT_END,
   KEY_FIRST_START, // used to check trailling comma
@@ -613,6 +614,7 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
       case LocateState.ROOT_END:
         token.type = "eof";
         token.subtype = undefined;
+        _location = LocateState.EOF;
         return;
       case LocateState.KEY_FIRST_START:
       case LocateState.KEY_START:
@@ -627,6 +629,9 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
       case LocateState.ELEMENT_END:
       case LocateState.EMPTY_ARRAY:
         _throw("unexpected EOF while parsing array");
+
+      case LocateState.EOF:
+        _throw("unexpected EOF after EOF");
     }
   };
   const _handleSlash = (token: any): void => {
@@ -1387,7 +1392,7 @@ export function createJsonStreamParser(option?: JsonOption) {
 export function jsonStreamParse(s: string, option?: JsonOption) {
   const parser = createJsonStreamParser(option);
   const ret = parser.feed(s);
-  parser.end();
+  ret.push(parser.end());
   return ret;
 }
 

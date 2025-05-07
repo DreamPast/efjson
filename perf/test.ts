@@ -22,12 +22,16 @@ measurePrint(() => {
   const parser = createJsonStreamParser();
   const token: JsonToken = {} as any;
   for (const c of s) parser.feedOneTo(token, c);
-}, "donnot save token");
+}, "stream (not save token)");
 
 measurePrint(() => {
   jsonStreamParse(s);
-}, "save token");
+}, "steam (save token)");
 
 measurePrint(() => {
   jsonEventParse(s, { type: "array", save() {} });
-}, "event");
+}, "event (save)");
+
+measurePrint(() => {
+  jsonEventParse(s, { type: "array" });
+}, "event (not save)");
