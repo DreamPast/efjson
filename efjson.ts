@@ -441,7 +441,7 @@ export class JsonStreamParserError extends JsonParserError {
   }
 }
 
-export function createJsonStreamParser(option?: JsonOption) {
+function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
   const acceptJson5Whitespace = option?.acceptJson5Whitespace;
   const acceptTrailingCommaInArray = option?.acceptTrailingCommaInArray;
   const acceptTrailingCommaInObject = option?.acceptTrailingCommaInObject;
@@ -516,6 +516,20 @@ export function createJsonStreamParser(option?: JsonOption) {
   let _substate2: string;
 
   const _stack: LocateState[] = [];
+
+  if (init !== undefined) {
+    [
+      _position,
+      _line,
+      _column,
+      _meetCr,
+      _location,
+      _state,
+      _substate,
+      _substate2,
+    ] = init;
+    _stack.push(...init[8]);
+  }
 
   function _throw(msg?: string): never {
     throw new JsonStreamParserError(
@@ -1350,7 +1364,24 @@ export function createJsonStreamParser(option?: JsonOption) {
     get column() {
       return _column;
     },
+
+    copy() {
+      return createJsonStreamParserInternal(option, [
+        _position,
+        _line,
+        _column,
+        _meetCr,
+        _location,
+        _state,
+        _substate,
+        _substate2,
+        _stack,
+      ]);
+    },
   };
+}
+export function createJsonStreamParser(option?: JsonOption) {
+  return createJsonStreamParserInternal(option);
 }
 
 export function jsonStreamParse(s: string, option?: JsonOption) {
