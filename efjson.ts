@@ -119,7 +119,6 @@ const enum LocateState {
   EMPTY_ARRAY,
 }
 
-// TODO: compatible with JSON5
 export type JsonOption = {
   // << white space >>
   /**
@@ -214,7 +213,7 @@ export type JsonOption = {
    */
   accpetMultiLineComment?: boolean;
 };
-export const JSON5_OPTION: JsonOption = Object.freeze({
+export const JSON5_OPTION = Object.freeze({
   // << white space >>
   acceptJson5Whitespace: true,
 
@@ -242,7 +241,7 @@ export const JSON5_OPTION: JsonOption = Object.freeze({
   acceptSingleLineComment: true,
   accpetMultiLineComment: true,
 });
-export const JSONC_OPTION: JsonOption = Object.freeze({
+export const JSONC_OPTION = Object.freeze({
   acceptSingleLineComment: true,
   accpetMultiLineComment: true,
 });
@@ -320,55 +319,21 @@ namespace TokenInfo {
     | { location: "array"; type: "array"; subtype: "next" };
 
   /* ========EXTRA======== */
-  type _Comment = { type: "comment" } & {
-    subtype: "may_start" | "single_line" | "multi_line" | "multi_line_end";
+
+  // << array >>
+  type _Extra_TraillingCommaInArray = {
+    location: "array";
+    type: "array";
+    subtype: "empty_next";
   };
 
-  type _StringNextLine = { subtype: "next_line" };
-  type _StringEscapeHexStart = {
-    subtype: "escape_hex_start";
+  // << object >>
+  type _Extra_TraillingCommaInObject = {
+    location: "object";
+    type: "object";
+    subtype: "empty_next";
   };
-  type _StringJson5Escape = { subtype: "escape" } & {
-    escaped_value: "\v" | "\0" | "'";
-  };
-  type _StringEscapeHex = { subtype: "escape_hex" } & (
-    | { index: 0; escaped_value?: undefined }
-    | { index: 1; escaped_value: string }
-  );
-  type _Extra_String = { type: "string" } & (
-    | _StringNextLine
-    | _StringEscapeHexStart
-    | _StringJson5Escape
-    | _StringEscapeHex
-    | _StringEscapeHex
-  );
-
-  type _NumberInfinity = {
-    subtype: "infinity";
-  } & (
-    | {
-        index: 0 | 1 | 2 | 3 | 4 | 5 | 6;
-        done?: undefined;
-      }
-    | { index: 7; done: true }
-  );
-  type _NumberNan = {
-    subtype: "nan";
-  } & ({ index: 0 | 1; done?: undefined } | { index: 2; done: true });
-  type _NumberNotDecimalStart = {
-    subtype: "hex_start" | "oct_start" | "bin_start";
-  };
-  type _NumberNotDecimal = {
-    subtype: "hex" | "oct" | "bin";
-  };
-  type _Extra_Number = { type: "number" } & (
-    | _NumberInfinity
-    | _NumberNan
-    | _NumberNotDecimalStart
-    | _NumberNotDecimal
-  );
-
-  type _IdentifierEscape =
+  type _Extra_IdentifierKey = { location: "key"; type: "identifier" } & (
     | {
         subtype: "escape_start";
         index: 0 | 1;
@@ -382,28 +347,100 @@ namespace TokenInfo {
         subtype: "escape";
         index: 3;
         escaped_value: string;
-      };
-  type _Identifier = { type: "identifier" } & (
+      }
     | { subtype: "normal" }
-    | _IdentifierEscape
   );
 
-  export type JsonTokenInfo =
-    | StdJsonTokenInfo
-    | ({ location: _NotKeyLocation | "key" } & (_Whitespace | _Comment))
-    | ({ location: "key" } & _Identifier)
-    | ({ location: _NotKeyLocation } & (_Extra_Number | _Extra_String))
+  // << string >>
+  type _Extra_MultilineString = {
+    location: _NotKeyLocation | "key";
+    type: "string";
+    subtype: "next_line";
+  };
+  type _Extra_Json5StringEscape = {
+    location: _NotKeyLocation | "key";
+    type: "string";
+  } & (
+    | { subtype: "escape_hex_start" }
+    | { subtype: "escape"; escaped_value: "\v" | "\0" | "'" }
+    | { subtype: "escape_hex"; index: 0; escaped_value?: undefined }
+    | { subtype: "escape_hex"; index: 1; escaped_value: string }
+  );
+
+  // << number >>
+  type _Extra_Nan = {
+    location: _NotKeyLocation;
+    type: "number";
+    subtype: "nan";
+  } & ({ index: 0 | 1; done?: undefined } | { index: 2; done: true });
+  type _Extra_Infinity = {
+    location: _NotKeyLocation;
+    type: "number";
+    subtype: "infinity";
+  } & (
     | {
-        location: "object";
-        type: "object";
-        subtype: "empty_next";
+        index: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+        done?: undefined;
       }
-    | { location: "array"; type: "array"; subtype: "empty_next" };
+    | { index: 7; done: true }
+  );
+  type _Extra_HexadecimalInteger = {
+    location: _NotKeyLocation;
+    type: "number";
+    subtype: "hex_start" | "hex";
+  };
+  type _Extra_OctalInteger = {
+    location: _NotKeyLocation;
+    type: "number";
+    subtype: "oct_start" | "oct";
+  };
+  type _Extra_BinaryInteger = {
+    location: _NotKeyLocation;
+    type: "number";
+    subtype: "bin_start" | "bin";
+  };
+
+  // << comment >>
+  type _Extra_SingleLineComment = {
+    location: _NotKeyLocation | "key";
+    type: "comment";
+    subtype: "may_start" | "single_line";
+  };
+  type _Extra_MultiLineComment = {
+    location: _NotKeyLocation | "key";
+    type: "comment";
+    subtype: "may_start" | "multi_line" | "multi_line_end";
+  };
+
+  type _Select<Opt, Key, True, False = never> = Key extends keyof Opt
+    ? Opt[Key] extends false
+      ? False
+      : True
+    : False;
+  export type JsonTokenInfo<Opt extends JsonOption> =
+    | StdJsonTokenInfo
+    // << array >>
+    | _Select<Opt, "acceptTrailingCommaInArray", _Extra_TraillingCommaInArray>
+    // << object >>
+    | _Select<Opt, "acceptTrailingCommaInObject", _Extra_TraillingCommaInObject>
+    | _Select<Opt, "acceptIdentifierKey", _Extra_IdentifierKey>
+    // << string >>
+    | _Select<Opt, "acceptMultilineString", _Extra_MultilineString>
+    | _Select<Opt, "accpetJson5StringEscape", _Extra_Json5StringEscape>
+    // << number >>
+    | _Select<Opt, "acceptNan", _Extra_Nan>
+    | _Select<Opt, "acceptInfinity", _Extra_Infinity>
+    | _Select<Opt, "acceptHexadecimalInteger", _Extra_HexadecimalInteger>
+    | _Select<Opt, "acceptOctalInteger", _Extra_OctalInteger>
+    | _Select<Opt, "acceptBinaryInteger", _Extra_BinaryInteger>
+    // << comment >>
+    | _Select<Opt, "acceptSingleLineComment", _Extra_SingleLineComment>
+    | _Select<Opt, "accpetMultiLineComment", _Extra_MultiLineComment>;
 }
-export type StdJsonToken = TokenInfo.StdJsonTokenInfo & {
+type JsonToken<Opt extends JsonOption> = TokenInfo.JsonTokenInfo<Opt> & {
   character: string;
 };
-export type JsonToken = TokenInfo.JsonTokenInfo & { character: string };
+type AllJsonToken = JsonToken<JsonOption>;
 
 const LOCATION_TABLE: ("root" | "key" | "value" | "element")[] = [];
 LOCATION_TABLE[LocateState.ROOT_START] = LOCATION_TABLE[LocateState.ROOT_END] =
@@ -447,35 +484,7 @@ export class JsonStreamParserError extends JsonParserError {
   }
 }
 
-interface JsonStreamParser {
-  feedOneTo: (token: JsonToken, c: string) => JsonToken;
-
-  feed(s: string): JsonToken[];
-  end(): JsonToken;
-
-  get position(): number;
-  get line(): number;
-  get column(): number;
-
-  copy(): JsonStreamParser;
-}
-interface StdJsonStreamParser {
-  feedOneTo: (token: StdJsonToken, c: string) => StdJsonToken;
-
-  feed(s: string): StdJsonToken[];
-  end(): StdJsonToken;
-
-  get position(): number;
-  get line(): number;
-  get column(): number;
-
-  copy(): StdJsonStreamParser;
-}
-
-function createJsonStreamParserInternal(
-  option?: JsonOption,
-  init?: any[]
-): JsonStreamParser {
+function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
   option = option || {};
   const acceptJson5Whitespace = option.acceptJson5Whitespace;
   const acceptTrailingCommaInArray = option.acceptTrailingCommaInArray;
@@ -1341,7 +1350,7 @@ function createJsonStreamParserInternal(
       _meetCr = false;
     }
   };
-  const _feed = (token: JsonToken, c: string) => {
+  const _feed = (token: AllJsonToken, c: string) => {
     _checkNextLine(c);
     _step(token, c);
     ++_position;
@@ -1361,15 +1370,15 @@ function createJsonStreamParserInternal(
     feedOneTo: _feed,
 
     feed(s: string) {
-      const ret: JsonToken[] = [];
+      const ret: AllJsonToken[] = [];
       for (const c of s) {
-        const token: JsonToken = {} as any;
+        const token: AllJsonToken = {} as any;
         ret.push(_feed(token, c));
       }
       return ret;
     },
-    end(): JsonToken {
-      const token: JsonToken = {} as any;
+    end(): AllJsonToken {
+      const token: AllJsonToken = {} as any;
       return _feed(token, EOF);
     },
 
@@ -1399,15 +1408,28 @@ function createJsonStreamParserInternal(
   };
 }
 
-export function createJsonStreamParser(): StdJsonStreamParser;
-export function createJsonStreamParser(option?: JsonOption): JsonStreamParser;
-export function createJsonStreamParser(option?: JsonOption) {
+export interface JsonStreamParser<Opt extends JsonOption = JsonOption> {
+  feedOneTo: (destToken: object, c: string) => JsonToken<Opt>;
+
+  feed(s: string): JsonToken<Opt>[];
+  end(): JsonToken<Opt>;
+
+  get position(): number;
+  get line(): number;
+  get column(): number;
+
+  copy(): JsonStreamParser<Opt>;
+}
+export function createJsonStreamParser<Opt extends JsonOption = {}>(
+  option?: Opt
+): JsonStreamParser<Opt> {
   return createJsonStreamParserInternal(option) as any;
 }
 
-export function jsonStreamParse(s: string): StdJsonToken[];
-export function jsonStreamParse(s: string, option?: JsonOption): JsonToken[];
-export function jsonStreamParse(s: string, option?: JsonOption) {
+export function jsonStreamParse<Opt extends JsonOption = {}>(
+  s: string,
+  option?: Opt
+): JsonToken<Opt>[] {
   const parser = createJsonStreamParser(option);
   const ret = parser.feed(s);
   ret.push(parser.end());
@@ -1428,12 +1450,12 @@ export type JsonObject = { [k: string]: JsonValue };
 export type JsonPrimitive = null | boolean | number | string;
 export type JsonValue = JsonPrimitive | JsonArray | JsonObject;
 
-export type JsonEventAnyReceiver = {
+export type JsonEventAnyReceiver<Opt extends JsonOption> = {
   type: "any";
 
   start?: () => void;
   end?: () => void;
-  feed?: (token: JsonToken) => void;
+  feed?: (token: JsonToken<Opt>) => void;
   save?: (val: JsonValue) => void;
 
   /**
@@ -1442,113 +1464,113 @@ export type JsonEventAnyReceiver = {
    * it will attempt to inherit them from the parent receiver.
    */
   dict?: {
-    null?: JsonEventNullReceiver;
-    boolean?: JsonEventBooleanReceiver;
-    number?: JsonEventNumberReceiver;
-    string?: JsonEventStringReceiver;
-    object?: JsonEventObjectReceiver;
-    array?: JsonEventArrayReceiver;
+    null?: JsonEventNullReceiver<Opt>;
+    boolean?: JsonEventBooleanReceiver<Opt>;
+    number?: JsonEventNumberReceiver<Opt>;
+    string?: JsonEventStringReceiver<Opt>;
+    object?: JsonEventObjectReceiver<Opt>;
+    array?: JsonEventArrayReceiver<Opt>;
   };
 };
-export type JsonEventNullReceiver = {
+export type JsonEventNullReceiver<Opt extends JsonOption> = {
   type: "null";
 
   start?: () => void;
   end?: () => void;
-  feed?: (token: JsonToken & { type: "null" }) => void;
+  feed?: (token: JsonToken<Opt> & { type: "null" }) => void;
   save?: (val: null) => void;
 };
-export type JsonEventBooleanReceiver = {
+export type JsonEventBooleanReceiver<Opt extends JsonOption> = {
   type: "boolean";
 
   start?: () => void;
   end?: () => void;
-  feed?: (token: JsonToken & { type: "true" | "false" }) => void;
+  feed?: (token: JsonToken<Opt> & { type: "true" | "false" }) => void;
   save?: (val: boolean) => void;
 };
-export type JsonEventNumberReceiver = {
+export type JsonEventNumberReceiver<Opt extends JsonOption> = {
   type: "number";
 
   start?: () => void;
   end?: () => void;
-  feed?: (token: JsonToken & { type: "number" }) => void;
+  feed?: (token: JsonToken<Opt> & { type: "number" }) => void;
   save?: (num: number) => void;
 };
-export type JsonEventStringReceiver = {
+export type JsonEventStringReceiver<Opt extends JsonOption> = {
   type: "string";
   append?: (chunk: string) => void;
 
   start?: () => void;
   end?: () => void;
-  feed?: (token: JsonToken & { type: "string" }) => void;
+  feed?: (token: JsonToken<Opt> & { type: "string" }) => void;
   save?: (str: string) => void;
 };
-export type JsonEventObjectReceiver = {
+export type JsonEventObjectReceiver<Opt extends JsonOption> = {
   type: "object";
 
   set?: (key: string, value: JsonValue) => void;
   next?: () => void;
 
-  keyReceiver?: JsonEventStringReceiver;
-  subscribeList?: ((key: string) => JsonEventReceiver | undefined)[];
+  keyReceiver?: JsonEventStringReceiver<Opt>;
+  subscribeList?: ((key: string) => JsonEventReceiver<Opt> | undefined)[];
 
   start?: () => void;
   end?: () => void;
-  feed?: (token: JsonToken & { type: "object" }) => void;
+  feed?: (token: JsonToken<Opt> & { type: "object" }) => void;
   save?: (obj: JsonObject) => void;
 };
-export type JsonEventArrayReceiver = {
+export type JsonEventArrayReceiver<Opt extends JsonOption> = {
   type: "array";
 
   set?: (index: number, value: JsonValue) => void;
   next?: (new_index: number) => void;
 
-  subscribeList?: ((index: number) => JsonEventReceiver | undefined)[];
+  subscribeList?: ((index: number) => JsonEventReceiver<Opt> | undefined)[];
 
   start?: () => void;
   end?: () => void;
-  feed?: (token: JsonToken & { type: "array" }) => void;
+  feed?: (token: JsonToken<Opt> & { type: "array" }) => void;
   save?: (obj: JsonArray) => void;
 };
-export type JsonEventReceiver =
-  | JsonEventAnyReceiver
-  | JsonEventNullReceiver
-  | JsonEventBooleanReceiver
-  | JsonEventNumberReceiver
-  | JsonEventStringReceiver
-  | JsonEventObjectReceiver
-  | JsonEventArrayReceiver;
+export type JsonEventReceiver<Opt extends JsonOption = JsonOption> =
+  | JsonEventAnyReceiver<Opt>
+  | JsonEventNullReceiver<Opt>
+  | JsonEventBooleanReceiver<Opt>
+  | JsonEventNumberReceiver<Opt>
+  | JsonEventStringReceiver<Opt>
+  | JsonEventObjectReceiver<Opt>
+  | JsonEventArrayReceiver<Opt>;
 
 namespace EventState {
-  export type _Unknown = {
+  export type _Unknown<Opt extends JsonOption> = {
     _type?: undefined;
-    _receiver: JsonEventReceiver;
+    _receiver: JsonEventReceiver<Opt>;
     _save?: undefined;
   };
-  export type _StateLess = {
+  export type _StateLess<Opt extends JsonOption> = {
     _type: "null" | "true" | "false";
-    _receiver: JsonEventReceiver;
+    _receiver: JsonEventReceiver<Opt>;
     _save?: undefined;
   };
-  export type _Number = {
+  export type _Number<Opt extends JsonOption> = {
     _type: "number";
-    _receiver: JsonEventNumberReceiver;
+    _receiver: JsonEventNumberReceiver<Opt>;
 
     _save?: boolean;
     _list: string[];
   };
-  export type _String = {
+  export type _String<Opt extends JsonOption> = {
     _type: "string";
-    _receiver: JsonEventStringReceiver;
+    _receiver: JsonEventStringReceiver<Opt>;
 
     _save?: boolean;
     _list: string[];
     _isIdentifier?: boolean;
   };
 
-  export type _Object = {
+  export type _Object<Opt extends JsonOption> = {
     _type: "object";
-    _receiver: JsonEventObjectReceiver;
+    _receiver: JsonEventObjectReceiver<Opt>;
 
     _saveChild: boolean;
     _child?: JsonValue;
@@ -1559,9 +1581,9 @@ namespace EventState {
     _saveValue: boolean;
     _object: JsonObject;
   };
-  export type _Array = {
+  export type _Array<Opt extends JsonOption> = {
     _type: "array";
-    _receiver: JsonEventArrayReceiver;
+    _receiver: JsonEventArrayReceiver<Opt>;
 
     _saveChild: boolean;
     _child?: JsonValue;
@@ -1570,16 +1592,25 @@ namespace EventState {
     _save: boolean;
     _array: JsonArray;
   };
-  export type _Struct = _Object | _Array;
+  export type _Struct<Opt extends JsonOption> = _Object<Opt> | _Array<Opt>;
 
-  export type _State = _Unknown | _StateLess | _Number | _String | _Struct;
+  export type _State<Opt extends JsonOption> =
+    | _Unknown<Opt>
+    | _StateLess<Opt>
+    | _Number<Opt>
+    | _String<Opt>
+    | _Struct<Opt>;
 }
 
 /**
  * Input tokens and emit events
  */
-export function createJsonEventEmitter(receiver: JsonEventReceiver) {
-  const _state: EventState._State[] = [{ _receiver: receiver }];
+export function createJsonEventEmitter<Opt extends JsonOption = JsonOption>(
+  receiver: JsonEventReceiver<Opt>
+) {
+  const _state: EventState._State<JsonOption>[] = [
+    { _receiver: receiver as JsonEventReceiver<JsonOption> },
+  ];
 
   function _throw(msg: string): never {
     throw new JsonEventParserError(`JsonEventParser Error - ${msg}`);
@@ -1588,20 +1619,23 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
   const _endValue = (value: JsonValue): void => {
     _state.pop()!._receiver.end?.();
     if (_state.length !== 0) {
-      (_state[_state.length - 1] as EventState._Struct)._child = value;
+      (_state[_state.length - 1] as EventState._Struct<JsonOption>)._child =
+        value;
     }
   };
   const _needSave = () => {
     return (
       _state.length >= 2 &&
-      (_state[_state.length - 2] as EventState._Struct)._saveChild
+      (_state[_state.length - 2] as EventState._Struct<JsonOption>)._saveChild
     );
   };
 
   const _feedStateless = (
-    token: JsonToken & { type: "true" | "false" | "null" }
+    token: AllJsonToken & { type: "true" | "false" | "null" }
   ) => {
-    const state = _state[_state.length - 1] as EventState._StateLess;
+    const state = _state[
+      _state.length - 1
+    ] as EventState._StateLess<JsonOption>;
     if (state._type === undefined) {
       state._type = token.type;
       state._receiver.start?.();
@@ -1620,8 +1654,8 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
       }
     }
   };
-  const _feedNumber = (token: JsonToken & { type: "number" }) => {
-    const state = _state[_state.length - 1] as EventState._Number;
+  const _feedNumber = (token: AllJsonToken & { type: "number" }) => {
+    const state = _state[_state.length - 1] as EventState._Number<JsonOption>;
     if (state._type === undefined) {
       state._type = "number";
       state._save = _needSave() || state._receiver.save !== undefined;
@@ -1631,8 +1665,8 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
     state._receiver.feed?.(token);
     state._list.push(token.character);
   };
-  const _feedString = (token: JsonToken & { type: "string" }) => {
-    const state = _state[_state.length - 1] as EventState._String;
+  const _feedString = (token: AllJsonToken & { type: "string" }) => {
+    const state = _state[_state.length - 1] as EventState._String<JsonOption>;
     if (state._type === undefined) {
       state._type = "string";
       state._save = _needSave() || state._receiver.save !== undefined;
@@ -1659,8 +1693,8 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
       _endValue(str);
     }
   };
-  const _feedIdentifier = (token: JsonToken & { type: "identifier" }) => {
-    const state = _state[_state.length - 1] as EventState._String;
+  const _feedIdentifier = (token: AllJsonToken & { type: "identifier" }) => {
+    const state = _state[_state.length - 1] as EventState._String<JsonOption>;
     if (state._type === undefined) {
       state._type = "string";
       state._save = _needSave() || state._receiver.save !== undefined;
@@ -1709,8 +1743,8 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
       }
     }
   };
-  const _feedObject = (token: JsonToken & { type: "object" }) => {
-    let state = _state[_state.length - 1] as EventState._Object;
+  const _feedObject = (token: AllJsonToken & { type: "object" }) => {
+    let state = _state[_state.length - 1] as EventState._Object<JsonOption>;
     if (token.subtype === "empty_next") {
       _state.pop();
       return;
@@ -1719,7 +1753,7 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
     if (state._type === undefined) {
       if (token.subtype === "end") {
         _state.pop();
-        state = _state[_state.length - 1] as EventState._Object;
+        state = _state[_state.length - 1] as EventState._Object<JsonOption>;
       } else {
         state._type = "object";
         state._save = _needSave() || state._receiver.save !== undefined;
@@ -1765,7 +1799,7 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
     /* if (token.subtype === "value_start") */ {
       state._saveChild = state._saveValue;
       state._key = state._child as string | undefined;
-      let receiver: JsonEventReceiver | undefined = undefined;
+      let receiver: JsonEventReceiver<JsonOption> | undefined = undefined;
       if (state._receiver.subscribeList !== undefined) {
         for (const func of state._receiver.subscribeList) {
           receiver = func(state._key!);
@@ -1778,11 +1812,11 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
       });
     }
   };
-  const _feedArray = (token: JsonToken & { type: "array" }): void => {
-    let state = _state[_state.length - 1] as EventState._Array;
+  const _feedArray = (token: AllJsonToken & { type: "array" }): void => {
+    let state = _state[_state.length - 1] as EventState._Array<JsonOption>;
     if (token.subtype === "empty_next") {
       _state.pop();
-      state = _state[_state.length - 1] as EventState._Array;
+      state = _state[_state.length - 1] as EventState._Array<JsonOption>;
       state._receiver.next?.(state._index + 1);
       return;
     }
@@ -1791,7 +1825,7 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
       if (token.subtype === "end") {
         // trailing comma
         _state.pop();
-        state = _state[_state.length - 1] as EventState._Array;
+        state = _state[_state.length - 1] as EventState._Array<JsonOption>;
       } else {
         state._type = "array";
         state._save = _needSave() || state._receiver.save !== undefined;
@@ -1802,7 +1836,7 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
         state._receiver.start?.();
         state._receiver.feed?.(token);
 
-        let receiver: JsonEventReceiver | undefined;
+        let receiver: JsonEventReceiver<JsonOption> | undefined;
         if (state._receiver.subscribeList !== undefined)
           for (const func of state._receiver.subscribeList) {
             receiver = func(state._index);
@@ -1833,7 +1867,7 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
       state._child = undefined;
       ++state._index;
 
-      let receiver: JsonEventReceiver | undefined = undefined;
+      let receiver: JsonEventReceiver<JsonOption> | undefined = undefined;
       if (state._receiver.subscribeList !== undefined)
         for (const func of state._receiver.subscribeList) {
           receiver = func(state._index);
@@ -1847,11 +1881,11 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
   };
 
   return {
-    feed(token: JsonToken) {
+    feed(token: AllJsonToken) {
       let state = _state[_state.length - 1];
       if (state === undefined) return;
       if (state._type === "number" && token.type !== "number") {
-        const str = (state as EventState._Number)._list.join("");
+        const str = (state as EventState._Number<JsonOption>)._list.join("");
         let radix: number | undefined = undefined;
         if (str[0] === "0")
           /* compatible with JSON5 */
@@ -1870,12 +1904,12 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
               break;
           }
         const val = radix ? parseInt(str.slice(2), radix) : parseFloat(str);
-        (state as EventState._Number)._receiver.save?.(val);
+        (state as EventState._Number<JsonOption>)._receiver.save?.(val);
         _endValue(val);
         state = _state[_state.length - 1];
       } else if (
         state._type === "string" &&
-        (state as EventState._String)._isIdentifier &&
+        (state as EventState._String<JsonOption>)._isIdentifier &&
         token.type !== "identifier"
       ) {
         (state._receiver as any).feed?.({
@@ -1885,8 +1919,8 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
           character: '"',
         });
         state._receiver.end?.();
-        const str = (state as EventState._String)._list.join("");
-        (state as EventState._String)._receiver.save?.(str);
+        const str = (state as EventState._String<JsonOption>)._list.join("");
+        (state as EventState._String<JsonOption>)._receiver.save?.(str);
         _endValue(str);
         state = _state[_state.length - 1];
       } else if (state._type === undefined)
@@ -1915,7 +1949,7 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
           : token.type;
       if (state._type === undefined && state._receiver.type === "any") {
         const anyReceiver = state._receiver;
-        const subReceiver: JsonEventReceiver | undefined =
+        const subReceiver: JsonEventReceiver<JsonOption> | undefined =
           anyReceiver.dict?.[tokenCastType];
         if (subReceiver === undefined) {
           state._receiver = { ...anyReceiver, type: tokenCastType };
@@ -1959,29 +1993,30 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
 /**
  * Input JSON string and emit events (equivalent to combine `JsonStreamParser` and `JsonEventEmiiter`)
  */
-export const createJsonEventParser = (
-  receiver: JsonEventReceiver,
-  option?: JsonOption
+export const createJsonEventParser = <Opt extends JsonOption = JsonOption>(
+  receiver: JsonEventReceiver<Opt>,
+  option?: Opt
 ) => {
   const _parser = createJsonStreamParser(option);
   const _emitter = createJsonEventEmitter(receiver);
-  const _token: JsonToken = {} as any;
+  const _token: object = {};
   return {
     feed(s: string) {
-      for (const c of s) _emitter.feed(_parser.feedOneTo(_token, c));
+      for (const c of s)
+        _emitter.feed(_parser.feedOneTo(_token, c) as AllJsonToken);
     },
     end() {
-      _emitter.feed(_parser.end());
+      _emitter.feed(_parser.end() as AllJsonToken);
     },
   };
 };
 
-export function jsonEventParse(
+export const jsonEventParse = <Opt extends JsonOption = JsonOption>(
   s: string,
-  receiver: JsonEventReceiver,
-  option?: JsonOption
-) {
+  receiver: JsonEventReceiver<Opt>,
+  option?: Opt
+) => {
   const parser = createJsonEventParser(receiver, option);
   parser.feed(s);
   parser.end();
-}
+};

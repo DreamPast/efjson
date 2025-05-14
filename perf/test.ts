@@ -2,7 +2,6 @@ import {
   createJsonStreamParser,
   jsonEventParse,
   jsonStreamParse,
-  JsonToken,
 } from "../efjson";
 
 const s1 = `[${"100,".repeat(1000).slice(0, -1)}],`;
@@ -20,7 +19,7 @@ measurePrint(() => JSON.parse(s), "JSON.parse");
 
 measurePrint(() => {
   const parser = createJsonStreamParser();
-  const token: JsonToken = {} as any;
+  const token: object = {};
   for (const c of s) parser.feedOneTo(token, c);
 }, "stream (not save token)");
 

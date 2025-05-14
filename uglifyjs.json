@@ -7,7 +7,7 @@
   },
   "mangle": {
     "properties": {
-      "regex": "/^_/"
+      "regex": "/^_[^_]/"
     },
     "toplevel": true
   }

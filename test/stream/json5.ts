@@ -1,4 +1,4 @@
-import { JSON5_OPTION } from "../../efjson";
+import { JSON5_OPTION, JsonOption } from "../../efjson";
 import { checkError } from "../util";
 
 const str = `{
@@ -21,7 +21,7 @@ No \\\\n's! \\x40",
 `;
 
 checkError(str, false, JSON5_OPTION);
-const option = Object.assign({}, JSON5_OPTION);
+const option: JsonOption = Object.assign({}, JSON5_OPTION);
 for (const key in option) {
   option[key as keyof typeof option] = false;
   checkError(str, true, option);
