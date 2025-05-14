@@ -1,4 +1,4 @@
-import { JsonStreamParser } from "../efjson";
+import { createJsonStreamParser } from "../efjson";
 
 const json = `
 {
@@ -28,8 +28,7 @@ const json = `
   }
 }
 `;
-const parser = new JsonStreamParser();
+const parser = createJsonStreamParser();
 // you can feed any length of string to the parser
-for(const c of json) 
-  console.log(parser.feed(c));
+for (const c of json) console.log(parser.feed(c));
 console.log(parser.end());

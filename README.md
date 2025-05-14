@@ -29,7 +29,7 @@ If you need a minimal build, the `dist` folder also provides `efjson.min.cjs` an
 ### Stream Parsing
 
 ```ts
-import { JsonStreamParser } from "efjson";
+import { createJsonStreamParser } from "efjson";
 
 const json = `
 {
@@ -59,7 +59,7 @@ const json = `
   }
 }
 `;
-const parser = new JsonStreamParser();
+const parser = createJsonStreamParser();
 // you can feed any length of string to the parser
 for(const c of json) 
   console.log(parser.feed(c));

@@ -29,7 +29,7 @@ npm install efjson
 ### 流式解析
 
 ```ts
-import { JsonStreamParser } from "./efjson";
+import { createJsonStreamParser } from "./efjson";
 
 const json = `
 {
@@ -59,8 +59,8 @@ const json = `
   }
 }
 `;
-const parser = new JsonStreamParser();
-// you can feed any length of string to the parser
+const parser = createJsonStreamParser();
+// 你可以传递任何长度的字符串到parser
 for(const c of json) 
   console.log(parser.feed(c));
 console.log(parser.end());
