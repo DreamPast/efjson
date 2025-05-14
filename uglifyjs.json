@@ -1,0 +1,14 @@
+{
+  "compress": {
+  },
+  "output": {
+    "comments": "some",
+    "ascii_only": true
+  },
+  "mangle": {
+    "properties": {
+      "regex": "/^_/"
+    },
+    "toplevel": true
+  }
+}

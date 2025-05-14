@@ -101,17 +101,18 @@ const enum ValueState {
 }
 
 const enum LocateState {
-  EOF,
   ROOT_START,
-  ROOT_END,
   KEY_FIRST_START, // used to check trailling comma
   KEY_START,
-  KEY_END,
   VALUE_START,
-  VALUE_END,
   ELEMENT_FIRST_START, // used to check trailling comma
   ELEMENT_START,
+
+  ROOT_END,
+  KEY_END,
+  VALUE_END,
   ELEMENT_END,
+  EOF,
 
   /* JSON5 */
   EMPTY_OBJECT,
@@ -416,13 +417,14 @@ LOCATION_TABLE[LocateState.ELEMENT_FIRST_START] =
   LOCATION_TABLE[LocateState.ELEMENT_END] =
     "element";
 
-const NEXT_STATE_TABLE: (LocateState | undefined)[] = [];
-NEXT_STATE_TABLE[LocateState.ROOT_START] = LocateState.ROOT_END;
-NEXT_STATE_TABLE[LocateState.KEY_START] = LocateState.KEY_END;
-NEXT_STATE_TABLE[LocateState.KEY_FIRST_START] = LocateState.KEY_END;
-NEXT_STATE_TABLE[LocateState.VALUE_START] = LocateState.VALUE_END;
-NEXT_STATE_TABLE[LocateState.ELEMENT_FIRST_START] = LocateState.ELEMENT_END;
-NEXT_STATE_TABLE[LocateState.ELEMENT_START] = LocateState.ELEMENT_END;
+const NEXT_STATE_TABLE: LocateState[] = [
+  LocateState.ROOT_END,
+  LocateState.KEY_END,
+  LocateState.KEY_END,
+  LocateState.VALUE_END,
+  LocateState.ELEMENT_END,
+  LocateState.ELEMENT_END,
+];
 
 //
 
@@ -444,11 +446,14 @@ export class JsonStreamParserError extends JsonParserError {
 
 export interface JsonStreamParser {
   feedOneTo: (token: JsonToken, c: string) => JsonToken;
+
   feed(s: string): JsonToken[];
   end(): JsonToken;
+
   get position(): number;
   get line(): number;
   get column(): number;
+
   copy(): JsonStreamParser;
 }
 
@@ -456,23 +461,24 @@ function createJsonStreamParserInternal(
   option?: JsonOption,
   init?: any[]
 ): JsonStreamParser {
-  const acceptJson5Whitespace = option?.acceptJson5Whitespace;
-  const acceptTrailingCommaInArray = option?.acceptTrailingCommaInArray;
-  const acceptTrailingCommaInObject = option?.acceptTrailingCommaInObject;
-  const acceptIdentifierKey = option?.acceptIdentifierKey;
-  const acceptSingleQuote = option?.acceptSingleQuote;
-  const acceptMultilineString = option?.acceptMultilineString;
-  const accpetJson5StringEscape = option?.accpetJson5StringEscape;
-  const acceptPositiveSign = option?.acceptPositiveSign;
-  const acceptEmptyFraction = option?.acceptEmptyFraction;
-  const acceptEmptyInteger = option?.acceptEmptyInteger;
-  const acceptNan = option?.acceptNan;
-  const acceptInfinity = option?.acceptInfinity;
-  const acceptHexadecimalInteger = option?.acceptHexadecimalInteger;
-  const acceptOctalInteger = option?.acceptOctalInteger;
-  const acceptBinaryInteger = option?.acceptBinaryInteger;
-  const acceptSingleLineComment = option?.acceptSingleLineComment;
-  const accpetMultiLineComment = option?.accpetMultiLineComment;
+  option = option || {};
+  const acceptJson5Whitespace = option.acceptJson5Whitespace;
+  const acceptTrailingCommaInArray = option.acceptTrailingCommaInArray;
+  const acceptTrailingCommaInObject = option.acceptTrailingCommaInObject;
+  const acceptIdentifierKey = option.acceptIdentifierKey;
+  const acceptSingleQuote = option.acceptSingleQuote;
+  const acceptMultilineString = option.acceptMultilineString;
+  const accpetJson5StringEscape = option.accpetJson5StringEscape;
+  const acceptPositiveSign = option.acceptPositiveSign;
+  const acceptEmptyFraction = option.acceptEmptyFraction;
+  const acceptEmptyInteger = option.acceptEmptyInteger;
+  const acceptNan = option.acceptNan;
+  const acceptInfinity = option.acceptInfinity;
+  const acceptHexadecimalInteger = option.acceptHexadecimalInteger;
+  const acceptOctalInteger = option.acceptOctalInteger;
+  const acceptBinaryInteger = option.acceptBinaryInteger;
+  const acceptSingleLineComment = option.acceptSingleLineComment;
+  const accpetMultiLineComment = option.accpetMultiLineComment;
 
   let _position = 0;
   let _line = 1;
@@ -529,7 +535,7 @@ function createJsonStreamParserInternal(
    */
   let _substate2: string;
 
-  const _stack: LocateState[] = [];
+  let _stack: LocateState[] = [];
 
   if (init !== undefined) {
     [
@@ -541,8 +547,8 @@ function createJsonStreamParserInternal(
       _state,
       _substate,
       _substate2,
+      _stack,
     ] = init;
-    _stack.push(...init[8]);
   }
 
   function _throw(msg?: string): never {
@@ -551,22 +557,15 @@ function createJsonStreamParserInternal(
     );
   }
 
-  const _nextState = (stat: LocateState): LocateState => {
-    const next = NEXT_STATE_TABLE[stat];
-    if (next === undefined) _throw("unexpected end");
-    return next;
-  };
-  const _handleComma = (token: any): void => {
+  const _handleComma = (token: any) => {
     if (_location === LocateState.VALUE_END) {
       _location = LocateState.KEY_START;
-      token.location = "object";
-      token.type = "object";
+      token.location = token.type = "object";
       token.subtype = "next";
       return;
     } else if (_location === LocateState.ELEMENT_END) {
       _location = LocateState.ELEMENT_START;
-      token.location = "array";
-      token.type = "array";
+      token.location = token.type = "array";
       token.subtype = "next";
       return;
     }
@@ -575,8 +574,7 @@ function createJsonStreamParserInternal(
     if (_location === LocateState.ELEMENT_FIRST_START) {
       if (acceptTrailingCommaInArray) {
         _location = LocateState.EMPTY_ARRAY;
-        token.location = "array";
-        token.type = "array";
+        token.location = token.type = "array";
         token.subtype = "empty_next";
         return;
       }
@@ -585,14 +583,14 @@ function createJsonStreamParserInternal(
     if (_location === LocateState.VALUE_START) _throw("unpexted empty value");
     _throw("unexpected comma");
   };
-  const _handleArrayEnd = (token: any): void => {
+  const _handleArrayEnd = (token: any) => {
     if (
       _location === LocateState.ELEMENT_FIRST_START ||
       _location === LocateState.ELEMENT_END ||
       (_location === LocateState.ELEMENT_START && acceptTrailingCommaInArray)
     ) {
       _state = ValueState.EMPTY;
-      _location = _nextState(_stack.pop()!);
+      _location = NEXT_STATE_TABLE[_stack.pop()!];
       token.location = LOCATION_TABLE[_location];
       token.type = "array";
       token.subtype = "end";
@@ -601,7 +599,7 @@ function createJsonStreamParserInternal(
 
     if (_location === LocateState.ELEMENT_START)
       _throw("extra commas not allowed in array");
-    _throw("bad closing bracket");
+    _throw("bad closing square bracket");
   };
   const _handleObjectEnd = (token: any): void => {
     if (
@@ -610,7 +608,7 @@ function createJsonStreamParserInternal(
       (_location === LocateState.KEY_START && acceptTrailingCommaInObject)
     ) {
       _state = ValueState.EMPTY;
-      _location = _nextState(_stack.pop()!);
+      _location = NEXT_STATE_TABLE[_stack.pop()!];
       token.location = LOCATION_TABLE[_location];
       token.type = "object";
       token.subtype = "end";
@@ -661,7 +659,7 @@ function createJsonStreamParserInternal(
     if (_substate === -1)
       _throw("a number cannot consist of only a negative sign");
     _state = ValueState.EMPTY;
-    _location = _nextState(_location);
+    _location = NEXT_STATE_TABLE[_location];
     if (c === EOF) return _handleEOF(token);
     if (c === "}") return _handleObjectEnd(token);
     if (c === "]") return _handleArrayEnd(token);
@@ -672,19 +670,14 @@ function createJsonStreamParserInternal(
     token.subtype = undefined;
     return;
   };
-  const _handleLiteral = (
-    token: any,
-    c: string,
-    literal: string,
-    nextState: ValueState
-  ): void => {
+  const _handleLiteral = (token: any, c: string, literal: string) => {
     const dc = literal[_substate];
     if (c === dc) {
       token.type = literal;
       token.index = _substate - 1;
       if (++_substate === literal.length) {
-        _state = nextState;
-        _location = _nextState(_location);
+        _state = ValueState.EMPTY;
+        _location = NEXT_STATE_TABLE[_location];
         token.done = true;
       } else token.done = undefined;
       return;
@@ -697,17 +690,16 @@ function createJsonStreamParserInternal(
     token: any,
     c: string,
     literal: string,
-    subtype: string,
-    nextState: ValueState
-  ): void => {
+    subtype: string
+  ) => {
     const dc = literal[_substate];
     if (c === dc) {
       token.type = "number";
       token.subtype = subtype;
       token.index = _substate - 1;
       if (++_substate === literal.length) {
-        _state = nextState;
-        _location = _nextState(_location);
+        _state = ValueState.EMPTY;
+        _location = NEXT_STATE_TABLE[_location];
         token.done = true;
       } else token.done = false;
       return;
@@ -731,7 +723,7 @@ function createJsonStreamParserInternal(
     if (_location === LocateState.EMPTY_ARRAY) {
       if (c === "]") {
         _state = ValueState.EMPTY;
-        _location = _nextState(_stack.pop()!);
+        _location = NEXT_STATE_TABLE[_stack.pop()!];
         token.location = "array";
         token.type = "array";
         token.subtype = "end";
@@ -744,7 +736,7 @@ function createJsonStreamParserInternal(
     if (_location === LocateState.EMPTY_OBJECT) {
       if (c === "}") {
         _state = ValueState.EMPTY;
-        _location = _nextState(_stack.pop()!);
+        _location = NEXT_STATE_TABLE[_stack.pop()!];
         token.location = "object";
         token.type = "object";
         token.subtype = "end";
@@ -934,21 +926,15 @@ function createJsonStreamParserInternal(
       case ValueState.EMPTY:
         return _stepEmpty(token, c);
       case ValueState.NULL:
-        return _handleLiteral(token, c, "null", ValueState.EMPTY);
+        return _handleLiteral(token, c, "null");
       case ValueState.TRUE:
-        return _handleLiteral(token, c, "true", ValueState.EMPTY);
+        return _handleLiteral(token, c, "true");
       case ValueState.FALSE:
-        return _handleLiteral(token, c, "false", ValueState.EMPTY);
+        return _handleLiteral(token, c, "false");
       case ValueState.NUMBER_INFINITY:
-        return _handleNumberLiteral(
-          token,
-          c,
-          "Infinity",
-          "infinity",
-          ValueState.EMPTY
-        );
+        return _handleNumberLiteral(token, c, "Infinity", "infinity");
       case ValueState.NUMBER_NAN:
-        return _handleNumberLiteral(token, c, "NaN", "nan", ValueState.EMPTY);
+        return _handleNumberLiteral(token, c, "NaN", "nan");
 
       case ValueState.STRING_MULTILINE_CR:
         if (c === "\n") {
@@ -960,8 +946,7 @@ function createJsonStreamParserInternal(
       // fallthrough
       case ValueState.STRING:
         if (c === _substate2) {
-          const oldLocation = _location;
-          _location = _nextState(oldLocation);
+          _location = NEXT_STATE_TABLE[_location];
           _state = ValueState.EMPTY;
           token.type = "string";
           token.subtype = "end";
@@ -1360,6 +1345,7 @@ function createJsonStreamParserInternal(
 
   return {
     feedOneTo: _feed,
+
     feed(s: string) {
       const ret: JsonToken[] = [];
       for (const c of s) {
@@ -1393,7 +1379,7 @@ function createJsonStreamParserInternal(
         _state,
         _substate,
         _substate2,
-        _stack,
+        [..._stack],
       ]);
     },
   };
@@ -1856,26 +1842,24 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
       if (state === undefined) return;
       if (state._type === "number" && token.type !== "number") {
         const str = (state as EventState._Number)._list.join("");
-        let val: number;
-        if (str[0] === "0") {
+        let radix: number | undefined = undefined;
+        if (str[0] === "0")
           /* compatible with JSON5 */
           switch (str[1]) {
             case "x":
             case "X":
-              val = parseInt(str.slice(2), 16);
+              radix = 16;
               break;
             case "o":
             case "O":
-              val = parseInt(str.slice(2), 8);
+              radix = 8;
               break;
             case "b":
             case "B":
-              val = parseInt(str.slice(2), 2);
+              radix = 2;
               break;
-            default:
-              val = parseFloat(str);
           }
-        } else val = parseFloat(str);
+        const val = radix ? parseInt(str.slice(2), radix) : parseFloat(str);
         (state as EventState._Number)._receiver.save?.(val);
         _endValue(val);
         state = _state[_state.length - 1];
