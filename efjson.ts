@@ -247,16 +247,16 @@ export const JSONC_OPTION = Object.freeze({
 });
 
 namespace TokenInfo {
-  type _Whitespace = { type: "whitespace" };
-  type _Null = { type: "null" } & (
+  type _Whitespace = { type: "whitespace"; subtype?: undefined };
+  type _Null = { type: "null"; subtype?: undefined } & (
     | { index: 0 | 1 | 2; done?: undefined }
     | { index: 3; done: true }
   );
-  type _True = { type: "true" } & (
+  type _True = { type: "true"; subtype?: undefined } & (
     | { index: 0 | 1 | 2; done?: undefined }
     | { index: 3; done: true }
   );
-  type _False = { type: "false" } & (
+  type _False = { type: "false"; subtype?: undefined } & (
     | { index: 0 | 1 | 2 | 3; done?: undefined }
     | { index: 4; done: true }
   );
@@ -273,7 +273,6 @@ namespace TokenInfo {
     | { index: 0 | 1 | 2; escaped_value?: undefined }
     | { index: 3; escaped_value: string }
   );
-
   type _String = { type: "string" } & (
     | _StringStartEnd
     | _StringNormal
@@ -308,7 +307,7 @@ namespace TokenInfo {
     | { type: "array"; subtype: "start" | "end" };
   export type StdJsonTokenInfo =
     | ({ location: _NotKeyLocation | "key" } & _Whitespace)
-    | { location: "root"; type: "eof" }
+    | { location: "root"; type: "eof"; subtype?: undefined }
     | ({ location: _NotKeyLocation } & _NotKey)
     | ({ location: "key" } & _String)
     | {
@@ -317,8 +316,6 @@ namespace TokenInfo {
         subtype: "value_start" | "next";
       }
     | { location: "array"; type: "array"; subtype: "next" };
-
-  /* ========EXTRA======== */
 
   // << array >>
   type _Extra_TraillingCommaInArray = {
@@ -581,7 +578,16 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
     );
   }
 
-  const _handleComma = (token: any) => {
+  const _handleComma = (
+    token: AllJsonToken &
+      (
+        | {
+            location: "object";
+            type: "object";
+          }
+        | { location: "array"; type: "array" }
+      )
+  ) => {
     if (_location === LocateState.VALUE_END) {
       _location = LocateState.KEY_START;
       token.location = token.type = "object";
@@ -607,7 +613,7 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
     if (_location === LocateState.VALUE_START) _throw("unpexted empty value");
     _throw("unexpected comma");
   };
-  const _handleArrayEnd = (token: any) => {
+  const _handleArrayEnd = (token: AllJsonToken & { type: "array" }) => {
     if (
       _location === LocateState.ELEMENT_FIRST_START ||
       _location === LocateState.ELEMENT_END ||
@@ -615,7 +621,7 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
     ) {
       _state = ValueState.EMPTY;
       _location = NEXT_STATE_TABLE[_stack.pop()!];
-      token.location = LOCATION_TABLE[_location];
+      token.location = LOCATION_TABLE[_location] as any;
       token.type = "array";
       token.subtype = "end";
       return;
@@ -625,7 +631,7 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
       _throw("extra commas not allowed in array");
     _throw("bad closing square bracket");
   };
-  const _handleObjectEnd = (token: any): void => {
+  const _handleObjectEnd = (token: AllJsonToken & { type: "object" }): void => {
     if (
       _location === LocateState.KEY_FIRST_START ||
       _location === LocateState.VALUE_END ||
@@ -633,7 +639,7 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
     ) {
       _state = ValueState.EMPTY;
       _location = NEXT_STATE_TABLE[_stack.pop()!];
-      token.location = LOCATION_TABLE[_location];
+      token.location = LOCATION_TABLE[_location] as any;
       token.type = "object";
       token.subtype = "end";
       return;
@@ -643,7 +649,7 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
       _throw("extra commas not allowed in object");
     _throw("bad closing curly brace");
   };
-  const _handleEOF = (token: any): void => {
+  const _handleEOF = (token: AllJsonToken): void => {
     switch (_location) {
       case LocateState.ROOT_START:
       case LocateState.ROOT_END:
@@ -669,7 +675,7 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
         _throw("unexpected EOF after EOF");
     }
   };
-  const _handleSlash = (token: any): void => {
+  const _handleSlash = (token: AllJsonToken): void => {
     if (acceptSingleLineComment || accpetMultiLineComment) {
       _state = ValueState.COMMENT_MAY_START;
       token.location = LOCATION_TABLE[_location];
@@ -679,26 +685,31 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
     }
     _throw("comment not allowed");
   };
-  const _handleNumberSeparator = (token: any, c: string): void => {
+  const _handleNumberSeparator = (token: AllJsonToken, c: string): void => {
     if (_substate === -1)
       _throw("a number cannot consist of only a negative sign");
     _state = ValueState.EMPTY;
     _location = NEXT_STATE_TABLE[_location];
     if (c === EOF) return _handleEOF(token);
-    if (c === "}") return _handleObjectEnd(token);
-    if (c === "]") return _handleArrayEnd(token);
-    if (c === ",") return _handleComma(token);
+    if (c === "}") return _handleObjectEnd(token as any);
+    if (c === "]") return _handleArrayEnd(token as any);
+    if (c === ",") return _handleComma(token as any);
     if (c === "/") return _handleSlash(token);
     token.location = LOCATION_TABLE[_location];
     token.type = "whitespace";
     token.subtype = undefined;
     return;
   };
-  const _handleLiteral = (token: any, c: string, literal: string) => {
+  const _handleLiteral = (
+    token: AllJsonToken & { type: "null" | "true" | "false" },
+    c: string,
+    literal: string
+  ) => {
     const dc = literal[_substate];
     if (c === dc) {
-      token.type = literal;
-      token.index = _substate - 1;
+      token.type = literal as any;
+      token.subtype = undefined;
+      token.index = (_substate - 1) as any;
       if (++_substate === literal.length) {
         _state = ValueState.EMPTY;
         _location = NEXT_STATE_TABLE[_location];
@@ -711,7 +722,7 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
     );
   };
   const _handleNumberLiteral = (
-    token: any,
+    token: AllJsonToken & { type: "number"; subtype: "nan" | "infinity" },
     c: string,
     literal: string,
     subtype: string
@@ -719,13 +730,13 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
     const dc = literal[_substate];
     if (c === dc) {
       token.type = "number";
-      token.subtype = subtype;
-      token.index = _substate - 1;
+      token.subtype = subtype as any;
+      token.index = (_substate - 1) as any;
       if (++_substate === literal.length) {
         _state = ValueState.EMPTY;
         _location = NEXT_STATE_TABLE[_location];
         token.done = true;
-      } else token.done = false;
+      } else token.done = undefined;
       return;
     }
     _throw(
@@ -1292,6 +1303,7 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
           _location = LocateState.KEY_END;
           token.location = "key";
           token.type = "whitespace";
+          token.subtype = undefined;
           return;
         }
         if (isIdentifierNext(c)) {
