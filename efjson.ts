@@ -262,49 +262,25 @@ namespace TokenInfo {
     | { index: 4; done: true }
   );
 
-  /* JSON5 */
-  type _Comment = { type: "comment" } & {
-    subtype: "may_start" | "single_line" | "multi_line" | "multi_line_end";
-  };
-
   type _StringStartEnd = { subtype: "start" | "end" };
   type _StringNormal = { subtype: "normal" };
-  /* JSON5 */
-  type _StringNextLine = { subtype: "next_line" };
   type _StringEscape2Start = {
     subtype: "escape_start" | "unicode_start";
   };
-  /* JSON5 */
-  type _StringEscapeHexStart = {
-    subtype: "escape_hex_start";
-  };
   type _StringEscape = { subtype: "escape" } & {
     escaped_value: '"' | "\\" | "/" | "\b" | "\f" | "\n" | "\r" | "\t";
-  };
-  /* JSON5 */
-  type _StringJson5Escape = { subtype: "escape" } & {
-    escaped_value: "\v" | "\0" | "'";
   };
   type _StringUnicode = { subtype: "unicode" } & (
     | { index: 0 | 1 | 2; escaped_value?: undefined }
     | { index: 3; escaped_value: string }
   );
-  /* JSON5 */
-  type _StringEscapeHex = { subtype: "escape_hex" } & (
-    | { index: 0; escaped_value?: undefined }
-    | { index: 1; escaped_value: string }
-  );
 
   type _String = { type: "string" } & (
     | _StringStartEnd
-    | _StringNextLine
     | _StringNormal
     | _StringEscape2Start
-    | _StringEscapeHexStart
     | _StringEscape
-    | _StringJson5Escape
     | _StringUnicode
-    | _StringEscapeHex
   );
 
   type _NumberSign = {
@@ -316,7 +292,57 @@ namespace TokenInfo {
   type _NumberStart = {
     subtype: "fraction_start" | "exponent_start";
   };
-  /* JSON5 */
+  type _Number = { type: "number" } & (
+    | _NumberSign
+    | _NumberDigit
+    | _NumberStart
+  );
+
+  type _NotKeyLocation = "root" | "value" | "object" | "array" | "element";
+  type _NotKey =
+    | _String
+    | _Null
+    | _True
+    | _False
+    | _Number
+    | { type: "object"; subtype: "start" | "end" }
+    | { type: "array"; subtype: "start" | "end" };
+  export type StdJsonTokenInfo =
+    | ({ location: _NotKeyLocation | "key" } & _Whitespace)
+    | { location: "root"; type: "eof" }
+    | ({ location: _NotKeyLocation } & _NotKey)
+    | ({ location: "key" } & _String)
+    | {
+        location: "object";
+        type: "object";
+        subtype: "value_start" | "next";
+      }
+    | { location: "array"; type: "array"; subtype: "next" };
+
+  /* ========EXTRA======== */
+  type _Comment = { type: "comment" } & {
+    subtype: "may_start" | "single_line" | "multi_line" | "multi_line_end";
+  };
+
+  type _StringNextLine = { subtype: "next_line" };
+  type _StringEscapeHexStart = {
+    subtype: "escape_hex_start";
+  };
+  type _StringJson5Escape = { subtype: "escape" } & {
+    escaped_value: "\v" | "\0" | "'";
+  };
+  type _StringEscapeHex = { subtype: "escape_hex" } & (
+    | { index: 0; escaped_value?: undefined }
+    | { index: 1; escaped_value: string }
+  );
+  type _Extra_String = { type: "string" } & (
+    | _StringNextLine
+    | _StringEscapeHexStart
+    | _StringJson5Escape
+    | _StringEscapeHex
+    | _StringEscapeHex
+  );
+
   type _NumberInfinity = {
     subtype: "infinity";
   } & (
@@ -326,29 +352,22 @@ namespace TokenInfo {
       }
     | { index: 7; done: true }
   );
-  /* JSON5 */
   type _NumberNan = {
     subtype: "nan";
   } & ({ index: 0 | 1; done?: undefined } | { index: 2; done: true });
-  /* JSON5 */
   type _NumberNotDecimalStart = {
     subtype: "hex_start" | "oct_start" | "bin_start";
   };
-  /* JSON5 */
   type _NumberNotDecimal = {
     subtype: "hex" | "oct" | "bin";
   };
-  type _Number = { type: "number" } & (
-    | _NumberSign
-    | _NumberDigit
-    | _NumberStart
+  type _Extra_Number = { type: "number" } & (
     | _NumberInfinity
     | _NumberNan
     | _NumberNotDecimalStart
     | _NumberNotDecimal
   );
 
-  /* JSON5 */
   type _IdentifierEscape =
     | {
         subtype: "escape_start";
@@ -364,42 +383,26 @@ namespace TokenInfo {
         index: 3;
         escaped_value: string;
       };
-  /* JSON5 */
   type _Identifier = { type: "identifier" } & (
     | { subtype: "normal" }
     | _IdentifierEscape
   );
 
-  type _NotKeyLocation = "root" | "value" | "object" | "array" | "element";
-  type _NotKey =
-    | _String
-    | _Null
-    | _True
-    | _False
-    | _Number
-    | { type: "object"; subtype: "start" | "end" }
-    | { type: "array"; subtype: "start" | "end" };
-
   export type JsonTokenInfo =
+    | StdJsonTokenInfo
     | ({ location: _NotKeyLocation | "key" } & (_Whitespace | _Comment))
-    | { location: "root"; type: "eof" }
-    | ({ location: _NotKeyLocation } & _NotKey)
-    | ({ location: "key" } & (_String | _Identifier))
-    | {
-        location: "object";
-        type: "object";
-        subtype: "value_start" | "next";
-      }
-    /* JSON5 */
+    | ({ location: "key" } & _Identifier)
+    | ({ location: _NotKeyLocation } & (_Extra_Number | _Extra_String))
     | {
         location: "object";
         type: "object";
         subtype: "empty_next";
       }
-    | { location: "array"; type: "array"; subtype: "next" }
-    /* JSON5 */
     | { location: "array"; type: "array"; subtype: "empty_next" };
 }
+export type StdJsonToken = TokenInfo.StdJsonTokenInfo & {
+  character: string;
+};
 export type JsonToken = TokenInfo.JsonTokenInfo & { character: string };
 
 const LOCATION_TABLE: ("root" | "key" | "value" | "element")[] = [];
@@ -444,7 +447,7 @@ export class JsonStreamParserError extends JsonParserError {
   }
 }
 
-export interface JsonStreamParser {
+interface JsonStreamParser {
   feedOneTo: (token: JsonToken, c: string) => JsonToken;
 
   feed(s: string): JsonToken[];
@@ -455,6 +458,18 @@ export interface JsonStreamParser {
   get column(): number;
 
   copy(): JsonStreamParser;
+}
+interface StdJsonStreamParser {
+  feedOneTo: (token: StdJsonToken, c: string) => StdJsonToken;
+
+  feed(s: string): StdJsonToken[];
+  end(): StdJsonToken;
+
+  get position(): number;
+  get line(): number;
+  get column(): number;
+
+  copy(): StdJsonStreamParser;
 }
 
 function createJsonStreamParserInternal(
@@ -747,7 +762,6 @@ function createJsonStreamParserInternal(
       );
     }
 
-    // string
     if (c === '"' || (c === "'" && acceptSingleQuote)) {
       _state = ValueState.STRING;
       _substate2 = c;
@@ -1384,10 +1398,15 @@ function createJsonStreamParserInternal(
     },
   };
 }
+
+export function createJsonStreamParser(): StdJsonStreamParser;
+export function createJsonStreamParser(option?: JsonOption): JsonStreamParser;
 export function createJsonStreamParser(option?: JsonOption) {
-  return createJsonStreamParserInternal(option);
+  return createJsonStreamParserInternal(option) as any;
 }
 
+export function jsonStreamParse(s: string): StdJsonToken[];
+export function jsonStreamParse(s: string, option?: JsonOption): JsonToken[];
 export function jsonStreamParse(s: string, option?: JsonOption) {
   const parser = createJsonStreamParser(option);
   const ret = parser.feed(s);
@@ -1471,7 +1490,6 @@ export type JsonEventObjectReceiver = {
   next?: () => void;
 
   keyReceiver?: JsonEventStringReceiver;
-  subscribeDict?: { [key: string]: JsonEventReceiver };
   subscribeList?: ((key: string) => JsonEventReceiver | undefined)[];
 
   start?: () => void;
@@ -1707,9 +1725,7 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
         state._save = _needSave() || state._receiver.save !== undefined;
         state._saveValue = state._save || state._receiver.set !== undefined;
         state._saveKey =
-          state._saveValue ||
-          state._receiver.subscribeDict !== undefined ||
-          state._receiver.subscribeList !== undefined;
+          state._saveValue || state._receiver.subscribeList !== undefined;
 
         state._object = {};
         state._saveChild = state._saveKey;
@@ -1746,16 +1762,11 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
       });
       return;
     }
-    if (token.subtype === "value_start") {
+    /* if (token.subtype === "value_start") */ {
       state._saveChild = state._saveValue;
       state._key = state._child as string | undefined;
       let receiver: JsonEventReceiver | undefined = undefined;
-      if (state._receiver.subscribeDict !== undefined)
-        receiver = state._receiver.subscribeDict[state._key!];
-      if (
-        receiver === undefined &&
-        state._receiver.subscribeList !== undefined
-      ) {
+      if (state._receiver.subscribeList !== undefined) {
         for (const func of state._receiver.subscribeList) {
           receiver = func(state._key!);
           if (receiver !== undefined) break;
@@ -1765,7 +1776,6 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
         _type: undefined,
         _receiver: receiver ?? { type: "any" },
       });
-      return;
     }
   };
   const _feedArray = (token: JsonToken & { type: "array" }): void => {
@@ -1816,24 +1826,24 @@ export function createJsonEventEmitter(receiver: JsonEventReceiver) {
       return _endValue(state._array);
     }
 
-    // next element
-    state._receiver.next?.(state._index + 1);
-    if (state._save) state._array[state._index] = state._child!;
-    state._receiver.set?.(state._index, state._child!);
-    state._child = undefined;
-    ++state._index;
+    /* if(token.subtype === 'next') */ {
+      state._receiver.next?.(state._index + 1);
+      if (state._save) state._array[state._index] = state._child!;
+      state._receiver.set?.(state._index, state._child!);
+      state._child = undefined;
+      ++state._index;
 
-    let receiver: JsonEventReceiver | undefined = undefined;
-    if (state._receiver.subscribeList !== undefined)
-      for (const func of state._receiver.subscribeList) {
-        receiver = func(state._index);
-        if (receiver !== undefined) break;
-      }
-    _state.push({
-      _type: undefined,
-      _receiver: receiver ?? { type: "any" },
-    });
-    return;
+      let receiver: JsonEventReceiver | undefined = undefined;
+      if (state._receiver.subscribeList !== undefined)
+        for (const func of state._receiver.subscribeList) {
+          receiver = func(state._index);
+          if (receiver !== undefined) break;
+        }
+      _state.push({
+        _type: undefined,
+        _receiver: receiver ?? { type: "any" },
+      });
+    }
   };
 
   return {
