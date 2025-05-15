@@ -22,7 +22,7 @@ npm install efjson
 
 Copy `efjson.ts` into your project.
 
-If you need a minimal build, the `dist` folder also provides `efjson.min.cjs` and `efjson.min.mjs` (some private variables are renamed for better compression).
+If you need a minimal build, the `dist` folder also provides `efjson.min.mjs` (some private variables are renamed for better compression).
 
 ## Example
 

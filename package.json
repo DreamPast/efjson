@@ -4,6 +4,7 @@
   "description": "a streaming and event-driven JSON parser (with support for JSON5 and JSONC)",
   "main": "dist/efjson.js",
   "types": "dist/efjson.d.ts",
+  "type": "module",
   "keywords": [
     "json",
     "streaming",
@@ -19,7 +20,7 @@
     "gen_mjs": "uglifyjs dist/efjson.js --config-file uglifyjs.json --output dist/efjson.min.mjs --module",
     "build_cjs": "tsc && npm run gen_cjs",
     "build_mjs": "tsc --module es6 && npm run gen_mjs",
-    "prepare": "npm run build_mjs && npm run build_cjs"
+    "prepare": "npm run build_mjs"
   },
   "devDependencies": {
     "typescript": "^5.8.3",

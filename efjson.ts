@@ -1617,9 +1617,12 @@ namespace EventState {
 /**
  * Input tokens and emit events
  */
-export function createJsonEventEmitter<Opt extends JsonOption = JsonOption>(
+export interface JsonEventEmitter<Opt extends JsonOption = JsonOption> {
+  feed: (token: JsonToken<Opt>) => void;
+}
+export const createJsonEventEmitter = <Opt extends JsonOption = JsonOption>(
   receiver: JsonEventReceiver<Opt>
-) {
+): JsonEventEmitter<Opt> => {
   const _state: EventState._State<JsonOption>[] = [
     { _receiver: receiver as JsonEventReceiver<JsonOption> },
   ];
@@ -1893,7 +1896,7 @@ export function createJsonEventEmitter<Opt extends JsonOption = JsonOption>(
   };
 
   return {
-    feed(token: AllJsonToken) {
+    feed(token: JsonToken<Opt>) {
       let state = _state[_state.length - 1];
       if (state === undefined) return;
       if (state._type === "number" && token.type !== "number") {
@@ -2000,35 +2003,60 @@ export function createJsonEventEmitter<Opt extends JsonOption = JsonOption>(
       }
     },
   };
-}
+};
+
+export const jsonEventEmit = <Opt extends JsonOption = JsonOption>(
+  tokens: Iterable<JsonToken<Opt>>,
+  receiver: JsonEventReceiver<Opt>
+) => {
+  const emitter = createJsonEventEmitter(receiver);
+  for (const token of tokens) emitter.feed(token);
+};
 
 /**
  * Input JSON string and emit events (equivalent to combine `JsonStreamParser` and `JsonEventEmiiter`)
  */
+export interface JsonEventParser {
+  feed: (s: string) => void;
+  end: () => void;
+
+  get position(): number;
+  get line(): number;
+  get column(): number;
+}
 export const createJsonEventParser = <Opt extends JsonOption = JsonOption>(
   receiver: JsonEventReceiver<Opt>,
   option?: Opt
-) => {
+): JsonEventParser => {
   const _parser = createJsonStreamParser(option);
   const _emitter = createJsonEventEmitter(receiver);
-  const _token: object = {};
+  const _token = {};
   return {
     feed(s: string) {
-      for (const c of s)
-        _emitter.feed(_parser.feedOneTo(_token, c) as AllJsonToken);
+      for (const c of s) _emitter.feed(_parser.feedOneTo(_token, c));
     },
     end() {
-      _emitter.feed(_parser.end() as AllJsonToken);
+      _emitter.feed(_parser.end());
+    },
+    get position() {
+      return _parser.position;
+    },
+    get line() {
+      return _parser.line;
+    },
+    get column() {
+      return _parser.column;
     },
   };
 };
 
 export const jsonEventParse = <Opt extends JsonOption = JsonOption>(
-  s: string,
+  str: Iterable<string>,
   receiver: JsonEventReceiver<Opt>,
   option?: Opt
 ) => {
   const parser = createJsonEventParser(receiver, option);
-  parser.feed(s);
+  if (typeof str === "string") parser.feed(str);
+  else for (const s of str) parser.feed(s);
   parser.end();
 };
