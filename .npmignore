@@ -1,5 +1,7 @@
 *
-!dist/*
+!dist/efjson.js
+!dist/efjson.d.ts
+!dist/efjson.min.mjs
 !LICENSE
 !package.json
 !README_zh_CN.md
