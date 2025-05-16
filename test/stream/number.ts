@@ -1,4 +1,6 @@
+import { JsonOption, jsonStreamParse, JsonToken } from "../../efjson";
 import {
+  assertElementSubset,
   checkError,
   combineCall,
   makeRejectedTestcases,
@@ -179,3 +181,14 @@ combineCall(
     });
   }
 }
+
+assertElementSubset(jsonStreamParse("-1.0e+3"), [
+  { type: "number", subtype: "integer_sign" },
+  { type: "number", subtype: "integer_digit" },
+  { type: "number", subtype: "fraction_start" },
+  { type: "number", subtype: "fraction_digit" },
+  { type: "number", subtype: "exponent_start" },
+  { type: "number", subtype: "exponent_sign" },
+  { type: "number", subtype: "exponent_digit" },
+  { type: "eof", subtype: undefined },
+] as JsonToken[]);

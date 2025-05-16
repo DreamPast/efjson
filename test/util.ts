@@ -1,7 +1,34 @@
 import { JsonOption, JsonStreamParserError, jsonStreamParse } from "../efjson";
 
-export const assertEq = (got: any, expect: any) => {
-  if (got !== expect) throw new Error(`expected ${expect} but got ${got}`);
+const makePrefix = (prefix?: any) => (prefix ? prefix + ": " : "");
+
+export const assertEq = (got: any, expect: any, prefix?: any) => {
+  if (got !== expect)
+    throw new Error(`${makePrefix(prefix)}expected ${expect} but got ${got}`);
+};
+export const assertSubset = (
+  got: Record<string, any>,
+  expect: Record<string, any>,
+  prefix?: any
+) => {
+  for (const key in expect) {
+    if (key in got) {
+      if (got[key] !== expect[key])
+        throw new Error(
+          `${makePrefix(prefix)}expected ${key} to be ${expect[key]} but got ${
+            got[key]
+          }`
+        );
+    } else {
+      throw new Error(`${makePrefix(prefix)}expected ${key} to be present`);
+    }
+  }
+};
+export const assertElementSubset = (got: object[], expect: object[]) => {
+  if (got.length !== expect.length)
+    throw new Error(`expected ${expect.length} elements but got ${got.length}`);
+  const n = got.length;
+  for (let i = 0; i < n; i++) assertSubset(got[i], expect[i], `[${i}]`);
 };
 
 export const checkError = (

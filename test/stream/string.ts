@@ -1,4 +1,6 @@
+import { jsonStreamParse, JsonToken } from "../../efjson";
 import {
+  assertElementSubset,
   checkError,
   combineCall,
   makeRejectedTestcases,
@@ -115,3 +117,18 @@ for (let i = 0; i < 0x20; ++i) {
   });
   runTestCases(makeRejectedTestcases(testcases));
 }
+
+assertElementSubset(jsonStreamParse('"\\u1234\\na"'), [
+  { type: "string", subtype: "start" },
+  { type: "string", subtype: "escape_start" },
+  { type: "string", subtype: "escape_unicode_start" },
+  { type: "string", subtype: "escape_unicode", escaped_value: undefined },
+  { type: "string", subtype: "escape_unicode", escaped_value: undefined },
+  { type: "string", subtype: "escape_unicode", escaped_value: undefined },
+  { type: "string", subtype: "escape_unicode", escaped_value: "\u1234" },
+  { type: "string", subtype: "escape_start" },
+  { type: "string", subtype: "escape", escaped_value: "\n" },
+  { type: "string", subtype: "normal" },
+  { type: "string", subtype: "end" },
+  { type: "eof", subtype: undefined },
+] as JsonToken[]);

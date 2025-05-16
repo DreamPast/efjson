@@ -12,3 +12,5 @@ checkError("Iull", true, { acceptNan: true });
 checkError("Nnfinity", true, { acceptInfinity: true });
 
 checkError("\0", true);
+
+checkError('{"a\\\nb":1}', false, { acceptMultilineString: true });
