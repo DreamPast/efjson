@@ -15,14 +15,14 @@ export type JsonOption = {
   // << array >>
   /**
    * whether to accept a single trailing comma in array
-   * @example '[1,]', '[,]'
+   * @example '[1,]'
    */
   acceptTrailingCommaInArray?: boolean;
 
   // << object >>
   /**
    * whether to accept a single trailing comma in object
-   * @example '{"a":1,}', '{,}'
+   * @example '{"a":1,}'
    */
   acceptTrailingCommaInObject?: boolean;
   /**
@@ -136,3 +136,24 @@ export const JSON_FULL_OPTION = Object.freeze({
   acceptOctalInteger: true,
   acceptBinaryInteger: true,
 });
+
+export const parseJsonNumber = (str: string): number => {
+  let radix: number | undefined = undefined;
+  if (str[0] === "0")
+    /* compatible with JSON5 */
+    switch (str[1]) {
+      case "x":
+      case "X":
+        radix = 16;
+        break;
+      case "o":
+      case "O":
+        radix = 8;
+        break;
+      case "b":
+      case "B":
+        radix = 2;
+        break;
+    }
+  return radix ? parseInt(str.slice(2), radix) : parseFloat(str);
+};
