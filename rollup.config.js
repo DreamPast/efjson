@@ -1,5 +1,5 @@
-import typescript from "@rollup/plugin-typescript";
 import license from "rollup-plugin-license";
+import dts from "rollup-plugin-dts";
 
 const bannerContent = `/**
  * @module efjson
@@ -31,18 +31,19 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */`;
 
-export default {
-  input: "src/index.ts",
-  output: {
-    dir: "dist",
-    format: "es",
+export default [
+  {
+    input: "dist/index.js",
+    output: { file: "lib/efjson.js", format: "es" },
+    plugins: [
+      license({
+        banner: { content: bannerContent },
+      }),
+    ],
   },
-  plugins: [
-    typescript(),
-    license({
-      banner: {
-        content: bannerContent,
-      },
-    }),
-  ],
-};
+  {
+    input: "dist/index.d.ts",
+    output: [{ file: "lib/efjson.d.ts", format: "es" }],
+    plugins: [dts()],
+  },
+];

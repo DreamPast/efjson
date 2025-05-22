@@ -1,5 +1,5 @@
 *
-!dist/**/*
+!lib/**/*
 !LICENSE
 !package.json
 !README_zh_CN.md
