@@ -1,8 +1,4 @@
-import {
-  createJsonStreamParser,
-  jsonEventParse,
-  jsonStreamParse,
-} from "efjson";
+import { createJsonStreamParser, jsonEventParse, jsonNormalParse, jsonStreamParse } from "efjson";
 
 const s1 = `[${"100,".repeat(1000).slice(0, -1)}],`;
 const s = `[${s1.repeat(10000).slice(0, -1)}]`;
@@ -12,8 +8,7 @@ const measure = (fn: () => unknown) => {
   fn();
   return performance.now() - start;
 };
-const measurePrint = (fn: () => void, label: string = "") =>
-  console.log(label, measure(fn));
+const measurePrint = (fn: () => void, label: string = "") => console.log(label, measure(fn));
 
 measurePrint(() => JSON.parse(s), "JSON.parse");
 
@@ -34,3 +29,7 @@ measurePrint(() => {
 measurePrint(() => {
   jsonEventParse(s, { type: "array" });
 }, "event (not save)");
+
+measurePrint(() => {
+  jsonNormalParse(s);
+}, "normal");

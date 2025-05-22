@@ -17,7 +17,7 @@ import { assertEq } from "../util";
           assertEq(num, 0x12);
         },
       },
-      option
+      option,
     );
     assertEq(done, true);
   }
@@ -32,7 +32,7 @@ import { assertEq } from "../util";
           assertEq(num, 0o12);
         },
       },
-      option
+      option,
     );
     assertEq(done, true);
   }
@@ -47,7 +47,7 @@ import { assertEq } from "../util";
           assertEq(num, 0b10110);
         },
       },
-      option
+      option,
     );
     assertEq(done, true);
   }
