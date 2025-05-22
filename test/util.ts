@@ -1,4 +1,4 @@
-import { JsonOption, JsonStreamParserError, jsonStreamParse } from "../efjson";
+import { JsonOption, JsonStreamParserError, jsonStreamParse } from "efjson";
 
 const makePrefix = (prefix?: any) => (prefix ? prefix + ": " : "");
 

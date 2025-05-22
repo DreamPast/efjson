@@ -1,4 +1,4 @@
-import { jsonEventParse, JsonOption } from "../../efjson";
+import { jsonEventParse, JsonOption } from "efjson";
 import { assertEq } from "../util";
 {
   const option: JsonOption = {

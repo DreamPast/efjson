@@ -1,4 +1,4 @@
-import { jsonEventParse, JsonEventReceiver } from "../../efjson";
+import { jsonEventParse, JsonEventReceiver } from "efjson";
 import { assertEq } from "../util";
 {
   let saved: any;

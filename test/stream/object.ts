@@ -1,4 +1,4 @@
-import { JSON5_OPTION, jsonStreamParse, JsonToken } from "../../efjson";
+import { JSON5_OPTION, jsonStreamParse, JsonToken } from "efjson";
 import { assertElementSubset } from "../util";
 
 assertElementSubset(jsonStreamParse('{"a":{},"b":1}'), [

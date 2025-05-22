@@ -4,7 +4,7 @@
 
 ## Features
 
-- no dependencies
+- no runtime dependencies
 - supports JSON5 and JSONC
 - stream parser requires minimal memory when no events are triggered
 
@@ -17,12 +17,6 @@ The state diagram for stream parsing JSON can be found in [The Diagram of JSON T
 ```sh
 npm install efjson
 ```
-
-### Using Source Code Directly
-
-Copy `efjson.ts` into your project.
-
-If you need a minimal build, the `dist` folder also provides `efjson.min.mjs` (some private variables are renamed for better compression).
 
 ## Example
 
@@ -61,14 +55,14 @@ const json = `
 `;
 const parser = createJsonStreamParser();
 // you can feed any length of string to the parser
-for(const c of json) 
-  console.log(parser.feed(c));
+for (const c of json) console.log(parser.feed(c));
 console.log(parser.end());
 ```
+
 ### Event Response
 
 ```ts
-import { jsonEventParse } from "./efjson";
+import { jsonEventParse } from "efjson";
 
 const json = `
 {
@@ -105,7 +99,6 @@ jsonEventParse(json, {
     console.log(key, value);
   },
 });
-
 ```
 
 ## References

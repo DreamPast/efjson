@@ -1,4 +1,4 @@
-import { JSON5_OPTION } from "../../efjson";
+import { JSON5_OPTION } from "efjson";
 import { checkError } from "../util";
 
 checkError("[,,]", true, JSON5_OPTION);

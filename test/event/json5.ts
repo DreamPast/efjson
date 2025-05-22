@@ -1,4 +1,4 @@
-import { JSON5_OPTION, jsonEventParse } from "../../efjson";
+import { JSON5_OPTION, jsonEventParse } from "efjson";
 
 const str = `{
   // comments

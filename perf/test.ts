@@ -2,7 +2,7 @@ import {
   createJsonStreamParser,
   jsonEventParse,
   jsonStreamParse,
-} from "../efjson";
+} from "efjson";
 
 const s1 = `[${"100,".repeat(1000).slice(0, -1)}],`;
 const s = `[${s1.repeat(10000).slice(0, -1)}]`;

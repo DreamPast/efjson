@@ -1,4 +1,4 @@
-import { jsonEventParse } from "../efjson";
+import { jsonEventParse } from "efjson";
 
 const json = `
 {

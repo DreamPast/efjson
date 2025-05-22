@@ -1,4 +1,4 @@
-import { JSON5_OPTION, JsonOption } from "../../efjson";
+import { JSON5_OPTION, JsonOption } from "efjson";
 import { checkError } from "../util";
 
 const str = `{

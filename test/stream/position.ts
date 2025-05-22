@@ -1,4 +1,4 @@
-import { createJsonStreamParser } from "../../efjson";
+import { createJsonStreamParser } from "efjson"
 import { assertEq } from "../util";
 
 const getPosInfo = (s: string) => {

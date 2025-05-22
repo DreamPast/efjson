@@ -15,14 +15,15 @@
   "author": "Jin Cai",
   "license": "MIT",
   "scripts": {
-    "build": "tsc",
-    "gen_cjs": "uglifyjs dist/efjson.js --config-file uglifyjs.json --output dist/efjson.min.cjs --wrap efjson",
+    "build": "rollup -c rollup.config.js",
     "gen_mjs": "uglifyjs dist/efjson.js --config-file uglifyjs.json --output dist/efjson.min.mjs --module",
-    "build_cjs": "tsc && npm run gen_cjs",
-    "build_mjs": "tsc --module es6 && npm run gen_mjs",
+    "build_mjs": "npm run build && npm run gen_mjs",
     "prepare": "npm run build_mjs"
   },
   "devDependencies": {
+    "rollup": "^4.41.0",
+    "rollup-plugin-license": "^3.6.0",
+    "tslib": "^2.8.1",
     "typescript": "^5.8.3",
     "uglify-js": "^3.19.3"
   },

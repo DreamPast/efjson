@@ -1,4 +1,4 @@
-import { jsonStreamParse, JsonToken } from "../../efjson";
+import { jsonStreamParse, JsonToken } from "efjson";
 import { assertElementSubset, runTestCases } from "../util";
 
 runTestCases([["null"], ["true"], ["false"], "Null", "True", "False"]);

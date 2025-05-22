@@ -1,14 +1,14 @@
-#  efjson: 基于流的、事件响应式的JSON解析器
+# efjson: 基于流的、事件响应式的 JSON 解析器
 
 [English](./README.md) [简体中文](./README_zh_CN.md)
 
 ## 特色
 
-- 无依赖
-- 支持JSON5和JSONC
+- 无运行时依赖
+- 支持 JSON5 和 JSONC
 - 在无事件的情况下，流解析器只需要极少的内存
 
-流式解析JSON的状态图可以参考[JSON Token状态转义图](./doc/stream_token/README.md)
+流式解析 JSON 的状态图可以参考[JSON Token 状态转移图](./doc/stream_token/README.md)
 
 ## 安装
 
@@ -18,18 +18,12 @@
 npm install efjson
 ```
 
-### 直接使用源代码
-
-拷贝`efjson.ts`到你的项目中。
-
-如果你需要最小构建，dist文件夹中亦提供`efjson.min.mjs`（部分私有变量被重命名以便于压缩）。
-
 ## 例子
 
 ### 流式解析
 
 ```ts
-import { createJsonStreamParser } from "./efjson";
+import { createJsonStreamParser } from "efjson";
 
 const json = `
 {
@@ -61,15 +55,14 @@ const json = `
 `;
 const parser = createJsonStreamParser();
 // 你可以传递任何长度的字符串到parser
-for(const c of json) 
-  console.log(parser.feed(c));
+for (const c of json) console.log(parser.feed(c));
 console.log(parser.end());
 ```
 
 ### 事件响应
 
 ```ts
-import { jsonEventParse } from "./efjson";
+import { jsonEventParse } from "efjson";
 
 const json = `
 {
@@ -106,13 +99,12 @@ jsonEventParse(json, {
     console.log(key, value);
   },
 });
-
 ```
 
 ## 参阅
 
-JSON规范：[RFC 4627 on Json](https://www.ietf.org/rfc/rfc4627.txt)
+JSON 规范：[RFC 4627 on Json](https://www.ietf.org/rfc/rfc4627.txt)
 
-JSON状态图：[JSON](https://www.json.org/)
+JSON 状态图：[JSON](https://www.json.org/)
 
-JSON5规范：[The JSON5 Data Interchange Format](https://spec.json5.org/)
+JSON5 规范：[The JSON5 Data Interchange Format](https://spec.json5.org/)

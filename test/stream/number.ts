@@ -1,4 +1,4 @@
-import { JsonOption, jsonStreamParse, JsonToken } from "../../efjson";
+import { JsonOption, jsonStreamParse, JsonToken } from "efjson";
 import {
   assertElementSubset,
   checkError,
