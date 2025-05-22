@@ -847,7 +847,7 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
             token.index = 0;
             return;
           }
-          if(acceptNan && c === 'N') {
+          if (acceptNan && c === "N") {
             // "-NaN", "+NaN"
             _state = ValueState.NUMBER_NAN;
             _substate = 1;
