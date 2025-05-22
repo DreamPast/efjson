@@ -2,7 +2,7 @@ import typescript from "@rollup/plugin-typescript";
 import license from "rollup-plugin-license";
 
 const bannerContent = `/**
- * @file efjson.js
+ * @module efjson
  * @description a streaming JSON parser
  * @author Jin Cai
  * @license MIT
@@ -32,7 +32,7 @@ SOFTWARE.
 */`;
 
 export default {
-  input: "src/efjson.ts",
+  input: "src/index.ts",
   output: {
     dir: "dist",
     format: "es",

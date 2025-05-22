@@ -1,9 +1,9 @@
 {
   "name": "efjson",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "a streaming and event-driven JSON parser (with support for JSON5 and JSONC)",
-  "main": "dist/efjson.js",
-  "types": "dist/efjson.d.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "type": "module",
   "keywords": [
     "json",
@@ -16,13 +16,13 @@
   "license": "MIT",
   "scripts": {
     "build": "rollup -c rollup.config.js",
-    "gen_mjs": "uglifyjs dist/efjson.js --config-file uglifyjs.json --output dist/efjson.min.mjs --module",
+    "gen_mjs": "uglifyjs dist/index.js --config-file uglifyjs.json --output dist/efjson.min.mjs --module",
     "build_mjs": "npm run build && npm run gen_mjs",
-    "format_dist": "prettier --ignore-path --write dist/efjson.js \"dist/**/*.d.ts\"",
+    "format_dist": "prettier --ignore-path --write dist/index.js \"dist/**/*.d.ts\"",
     "format": "prettier --write src/ test/ perf/",
     "test": "tsx --tsconfig ./test/tsconfig.json ./test/test.ts",
     "perf": "tsx --tsconfig ./test/tsconfig.json ./perf/test.ts",
-    "prepare": "npm run build_mjs && npm run format_dist"
+    "prepack": "npm run build_mjs && npm run format_dist"
   },
   "devDependencies": {
     "@rollup/plugin-typescript": "^12.1.2",
