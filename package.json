@@ -18,10 +18,11 @@
     "build": "rollup -c rollup.config.js",
     "gen_mjs": "uglifyjs dist/efjson.js --config-file uglifyjs.json --output dist/efjson.min.mjs --module",
     "build_mjs": "npm run build && npm run gen_mjs",
-    "format_dist": "prettier -- --ignore-path --write dist/efjson.js \"dist/**/*.d.ts\"",
-    "format": "prettier -- --write src/ test/ perf/",
+    "format_dist": "prettier --ignore-path --write dist/efjson.js \"dist/**/*.d.ts\"",
+    "format": "prettier --write src/ test/ perf/",
     "test": "tsx --tsconfig ./test/tsconfig.json ./test/test.ts",
-    "prepare": "npm run build_mjs"
+    "perf": "tsx --tsconfig ./test/tsconfig.json ./perf/test.ts",
+    "prepare": "npm run build_mjs && npm run format_dist"
   },
   "devDependencies": {
     "@rollup/plugin-typescript": "^12.1.2",
