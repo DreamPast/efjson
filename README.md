@@ -145,3 +145,7 @@ JSON Specification: [RFC 4627 on JSON](https://www.ietf.org/rfc/rfc4627.txt)
 JSON State Diagram: [JSON](https://www.json.org/)
 
 JSON5 Specification: [The JSON5 Data Interchange Format](https://spec.json5.org/)
+
+JSON Pointer: [JavaScript Object Notation (JSON) Pointer](https://datatracker.ietf.org/doc/html/rfc6901)
+
+Relative JSON Pointers: [Relative JSON Pointers](https://datatracker.ietf.org/doc/html/draft-bhutton-relative-json-pointer-00)

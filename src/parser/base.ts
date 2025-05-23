@@ -5,6 +5,14 @@ export class JsonParserError extends Error {
   }
 }
 
+/**
+ * JSON
+ * @see https://www.ietf.org/rfc/rfc4627.txt
+ * 
+ * JSON5
+ * @see https://spec.json5.org/
+ */
+
 export type JsonOption = {
   // << white space >>
   /**

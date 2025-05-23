@@ -145,3 +145,7 @@ JSON 规范：[RFC 4627 on Json](https://www.ietf.org/rfc/rfc4627.txt)
 JSON 状态图：[JSON](https://www.json.org/)
 
 JSON5 规范：[The JSON5 Data Interchange Format](https://spec.json5.org/)
+
+JSON 指针: [JavaScript Object Notation (JSON) Pointer](https://datatracker.ietf.org/doc/html/rfc6901)
+
+相对 JSON 指针: [Relative JSON Pointers](https://datatracker.ietf.org/doc/html/draft-bhutton-relative-json-pointer-00)

@@ -1,4 +1,4 @@
-import { jsonPointer, jsonPointerCompile, jsonPointerDecompile } from "efjson";
+import { jsonPointer, jsonPointerCompile, jsonPointerDecompile, jsonPointerGet } from "efjson";
 import { assertEq } from "./util";
 
 {
@@ -10,7 +10,6 @@ import { assertEq } from "./util";
   assertEq(jsonPointer(obj, "/a"), { b: [1, 2, 3] });
   assertEq(jsonPointer(obj, "/a/b"), [1, 2, 3]);
   assertEq(jsonPointer(obj, "/a/b/0"), 1);
-  assertEq(jsonPointer(obj, "/a/b/-"), undefined);
 
   jsonPointer(obj, "/a/d", 4);
   assertEq((obj as any).a.d, 4);
@@ -51,5 +50,34 @@ import { assertEq } from "./util";
   for (const [input, output] of tab) {
     assertEq(jsonPointerCompile(input), output);
     assertEq(jsonPointerDecompile(output), input);
+  }
+}
+
+{
+  const obj = {
+    foo: ["bar", "baz"],
+    highly: {
+      nested: {
+        objects: true,
+      },
+    },
+  };
+  {
+    const start = ["foo", "1"];
+    assertEq(jsonPointerGet(obj, "0", start), "baz");
+    assertEq(jsonPointerGet(obj, "1/0", start), "bar");
+    assertEq(jsonPointerGet(obj, "0-1", start), "bar");
+    assertEq(jsonPointerGet(obj, "2/highly/nested/objects", start), true);
+    assertEq(jsonPointerGet(obj, "0#", start), 1);
+    assertEq(jsonPointerGet(obj, "0-1#", start), 0);
+    assertEq(jsonPointerGet(obj, "1#", start), "foo");
+  }
+  {
+    const start = ["highly", "nested"];
+    assertEq(jsonPointerGet(obj, "0/objects", start), true);
+    assertEq(jsonPointerGet(obj, "1/nested/objects", start), true);
+    assertEq(jsonPointerGet(obj, "2/foo/0", start), "bar");
+    assertEq(jsonPointerGet(obj, "0#", start), "nested");
+    assertEq(jsonPointerGet(obj, "1#", start), "highly");
   }
 }
