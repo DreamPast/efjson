@@ -3,6 +3,7 @@ import dts from "rollup-plugin-dts";
 
 const bannerContent = `/**
  * @module efjson
+ * @version ${process.env.npm_package_version}
  * @description a streaming JSON parser
  * @author Jin Cai
  * @license MIT

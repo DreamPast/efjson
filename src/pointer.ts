@@ -1,13 +1,5 @@
 import { JsonValue } from "./base";
 
-/**
- * JSON Pointer
- * @see https://datatracker.ietf.org/doc/html/rfc6901
- *
- * Relative Json Pointer
- * @see https://datatracker.ietf.org/doc/html/draft-bhutton-relative-json-pointer-00
- */
-
 export class JsonPointerError extends Error {
   constructor(message: string) {
     super(message);
@@ -164,11 +156,26 @@ export const jsonPointerSet = (
   else if (typeof obj === "object" && obj !== null) obj[part] = value;
   else throw new JsonPointerError("not an object or array");
 };
-export const jsonPointer = (
+
+type JsonPointerFunction = {
+  (obj: JsonValue, path: string | string[], value?: undefined, start?: string | string[]): JsonValue;
+  (obj: JsonValue, path: string | string[], value: JsonValue, start?: string | string[]): void;
+};
+
+/**
+ * Get or set value in JSON object by JSON Pointer or relative JSON Pointer.
+ *
+ * spec:
+ * - JSON Pointer
+ * @see https://datatracker.ietf.org/doc/html/rfc6901
+ * - Relative Json Pointer
+ * @see https://datatracker.ietf.org/doc/html/draft-bhutton-relative-json-pointer-00
+ */
+export const jsonPointer = ((
   obj: JsonValue,
   path: string | string[],
   value?: JsonValue | undefined,
   start?: string | string[],
 ) => {
   return value === undefined ? jsonPointerGet(obj, path, start) : jsonPointerSet(obj, path, value, start);
-};
+}) as JsonPointerFunction;
