@@ -11,3 +11,5 @@ import "./normal/array";
 import "./normal/object";
 import "./normal/json5";
 import "./normal/regression";
+
+import "./pointer";
