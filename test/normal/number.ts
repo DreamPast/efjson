@@ -127,8 +127,8 @@ combineCall(
   for (const sign of ["", "+", "-"]) {
     for (const s of [`${sign}0o1`, `${sign}0O1`]) {
       checkNormal(s, undefined);
-      checkNormal(s, sign !== "+" ? parseInt(s) : undefined, { acceptOctalInteger: true });
-      checkNormal(s, parseInt(s), { acceptOctalInteger: true, acceptPositiveSign: true });
+      checkNormal(s, sign !== "+" ? parseInt(`${sign}1`) : undefined, { acceptOctalInteger: true });
+      checkNormal(s, parseInt(`${sign}1`), { acceptOctalInteger: true, acceptPositiveSign: true });
     }
   }
 }
@@ -143,8 +143,8 @@ combineCall(
   for (const sign of ["", "+", "-"]) {
     for (const s of [`${sign}0b1`, `${sign}0B1`]) {
       checkNormal(s, undefined);
-      checkNormal(s, sign !== "+" ? parseInt(s) : undefined, { acceptBinaryInteger: true });
-      checkNormal(s, parseInt(s), { acceptBinaryInteger: true, acceptPositiveSign: true });
+      checkNormal(s, sign !== "+" ? parseInt(`${sign}1`) : undefined, { acceptBinaryInteger: true });
+      checkNormal(s, parseInt(`${sign}1`), { acceptBinaryInteger: true, acceptPositiveSign: true });
     }
   }
 }

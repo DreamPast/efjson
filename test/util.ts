@@ -2,28 +2,32 @@ import { JsonOption, JsonStreamParserError, jsonNormalParse, jsonStreamParse } f
 
 const makePrefix = (prefix?: any) => (prefix != undefined ? `[${prefix}]` : "");
 const compareJson = (lhs: any, rhs: any, prefix: string) => {
-  if (typeof lhs !== typeof rhs) throw new Error(`type mismatch, ${typeof lhs} != ${typeof rhs}`);
+  if (typeof lhs !== typeof rhs) throw new Error(`${prefix}type mismatch, ${typeof lhs} != ${typeof rhs}`);
   if (Object.is(lhs, rhs)) return;
   if (Array.isArray(lhs) && Array.isArray(rhs)) {
-    if (lhs.length !== rhs.length) throw new Error(`array length mismatch, ${lhs.length} != ${rhs.length}`);
+    if (lhs.length !== rhs.length) throw new Error(`${prefix}array length mismatch, ${lhs.length} != ${rhs.length}`);
     for (let i = 0; i < lhs.length; i++) {
       try {
         compareJson(lhs[i], rhs[i], prefix);
       } catch (e) {
-        throw new Error(`array element mismatch, ${i}: ${lhs[i]} != ${rhs[i]}\n${e}`);
+        throw new Error(`${prefix}array element mismatch, ${i}: ${lhs[i]} != ${rhs[i]}\n${e}`);
       }
     }
     return;
   }
-  for (const key in lhs) {
-    if (!(key in rhs)) throw new Error(`object key mismatch, ${key} not in rhs`);
-    try {
-      compareJson(lhs[key], rhs[key], prefix);
-    } catch (e) {
-      throw new Error(`object key mismatch, ${key}: ${lhs[key]} != ${rhs[key]}\n${e}`);
+  if (typeof lhs === "object") {
+    for (const key in lhs) {
+      if (!(key in rhs)) throw new Error(`${prefix}object key mismatch, ${key} not in rhs`);
+      try {
+        compareJson(lhs[key], rhs[key], prefix);
+      } catch (e) {
+        throw new Error(`${prefix}object key mismatch, ${key}: ${lhs[key]} != ${rhs[key]}\n${e}`);
+      }
     }
+    for (const key in rhs) if (!(key in lhs)) throw new Error(`${prefix}object key mismatch, ${key} not in lhs`);
+    return;
   }
-  for (const key in rhs) if (!(key in lhs)) throw new Error(`object key mismatch, ${key} not in lhs`);
+  throw new Error(`${prefix}value mismatch, ${lhs} != ${rhs}`);
 };
 
 export const assertEq = (got: any, expect: any, prefix?: any) => {
@@ -83,14 +87,16 @@ export const checkNormal = <Opt extends JsonOption = JsonOption>(s: string, expe
     ret = jsonNormalParse(s, option);
   } catch (e) {
     if (expect === undefined) return;
+    console.log(s);
     console.log(option);
     throw new Error("expected no error, but got: " + e);
   }
   if (expect === undefined) {
+    console.log(s);
     console.log(option);
     throw new Error("expected error, but got nothing");
   }
-  assertEq(ret, expect);
+  assertEq(ret, expect, s);
 };
 
 export const checkError = (s: string, expected_error = true, option?: JsonOption) => {
