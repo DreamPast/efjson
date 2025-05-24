@@ -40,7 +40,7 @@ namespace NormalState {
 
 export const createJsonNormalEmitter = <Opt extends JsonOption = JsonOption>() => {
   const _state: NormalState._State[] = [{}];
-  let _ret: any = undefined;
+  let _ret: JsonValue | undefined = undefined;
 
   const _endValue = (value: JsonValue) => {
     _state.pop();
@@ -90,17 +90,12 @@ export const createJsonNormalEmitter = <Opt extends JsonOption = JsonOption>() =
   const _feedObject = (token: AllJsonToken & { type: "object" }) => {
     let state = _state[_state.length - 1] as NormalState._Object;
     if (state._type === undefined) {
-      if (token.subtype === "end") {
-        _state.pop();
-        state = _state[_state.length - 1] as NormalState._Object;
-      } else {
-        state._type = "object";
-        state._object = {};
-        _state.push({});
-        return;
-      }
+      state._type = "object";
+      state._object = {};
+      _state.push({});
+      return;
     }
-    if (token.subtype === "start") return;
+    /* if (token.subtype === "start") return; */
     if (token.subtype === "end") {
       if (state._key !== undefined) {
         // trailing comma
@@ -122,19 +117,13 @@ export const createJsonNormalEmitter = <Opt extends JsonOption = JsonOption>() =
   const _feedArray = (token: AllJsonToken & { type: "array" }): void => {
     let state = _state[_state.length - 1] as NormalState._Array;
     if (state._type === undefined) {
-      if (token.subtype === "end") {
-        // trailing comma
-        _state.pop();
-        state = _state[_state.length - 1] as NormalState._Array;
-      } else {
-        state._type = "array";
-        state._index = 0;
-        state._array = [];
-        _state.push({});
-        return;
-      }
+      state._type = "array";
+      state._index = 0;
+      state._array = [];
+      _state.push({});
+      return;
     }
-    if (token.subtype === "start") return;
+    /* if (token.subtype === "start") return; */
     if (token.subtype === "end") {
       if (state._child !== undefined) {
         state._array[state._index] = state._child!; // trailing comma
@@ -186,13 +175,13 @@ export const createJsonNormalEmitter = <Opt extends JsonOption = JsonOption>() =
           if (token.done) {
             if (token.type === "null") return _endValue(null);
             else if (token.type === "true") return _endValue(true);
-            else if (token.type === "false") return _endValue(false);
+            else /* if (token.type === "false") */ return _endValue(false);
           }
       }
     },
 
     get() {
-      return _ret as JsonValue | undefined;
+      return _ret;
     },
   };
 };
@@ -200,6 +189,7 @@ export const createJsonNormalEmitter = <Opt extends JsonOption = JsonOption>() =
 export const jsonNormalEmit = <Opt extends JsonOption = JsonOption>(tokens: Iterable<JsonToken<Opt>>) => {
   const emitter = createJsonNormalEmitter();
   for (const token of tokens) emitter.feed(token);
+  return emitter.get() as JsonValue;
 };
 
 export interface JsonNormalParser {
@@ -237,19 +227,9 @@ export const createJsonNormalParser = <Opt extends JsonOption = JsonOption>(opti
   };
 };
 
-export const jsonNormalParse = <Opt extends JsonOption = JsonOption>(str: Iterable<string>, option?: Opt) => {
+export const jsonNormalParse = <Opt extends JsonOption = JsonOption>(str: string, option?: Opt) => {
   const parser = createJsonNormalParser(option);
-  if (typeof str === "string") parser.feed(str);
-  else for (const s of str) parser.feed(s);
-  parser.end();
-  return parser.get() as JsonValue;
-};
-export const jsonNormalParseAsync = async <Opt extends JsonOption = JsonOption>(
-  str: AsyncIterable<string>,
-  option?: Opt,
-) => {
-  const parser = createJsonNormalParser(option);
-  for await (const s of str) parser.feed(s);
+  parser.feed(str);
   parser.end();
   return parser.get() as JsonValue;
 };

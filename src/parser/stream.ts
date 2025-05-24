@@ -14,7 +14,7 @@ const isNumberSeparator = (c: string, fitJson5?: boolean) => isWhitespace(c, fit
 const isControl = (c: string) => c >= "\x00" && c <= "\x1F";
 const isHex = (c: string) => (c >= "0" && c <= "9") || (c >= "a" && c <= "f") || (c >= "A" && c <= "F");
 const isIdentifierStart = (c: string) => /[$_\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]/u.test(c);
-const isIdentifierNext = (c: string) => isIdentifierStart(c) || /\p{Mn}\p{Mc}\p{Nd}\p{Pc}\u200C\u200D/u.test(c);
+const isIdentifierNext = (c: string) => isIdentifierStart(c) || /[\p{Mn}\p{Mc}\p{Nd}\p{Pc}\u200C\u200D]/u.test(c);
 
 const ESCAPE_TABLE: { [k: string]: string | undefined } = {
   '"': '"',
@@ -81,10 +81,6 @@ const enum LocateState {
   VALUE_END,
   ELEMENT_END,
   EOF,
-
-  /* JSON5 */
-  EMPTY_OBJECT,
-  EMPTY_ARRAY,
 }
 
 namespace TokenInfo {
@@ -292,7 +288,7 @@ export class JsonStreamParserError extends JsonParserError {
   }
 }
 
-function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
+const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
   option = option || {};
   // << white space >>
   const acceptJson5Whitespace = option.acceptJson5Whitespace;
@@ -403,7 +399,6 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
       token.subtype = "next";
       return;
     }
-    if (_location === LocateState.KEY_FIRST_START) _throw("extra commas not allowed in object");
     if (_location === LocateState.ELEMENT_FIRST_START) _throw("extra commas not allowed in empty array");
     if (_location === LocateState.VALUE_START) _throw("unpexted empty value");
     _throwUnexpected("comma");
@@ -455,13 +450,11 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
       case LocateState.KEY_END:
       case LocateState.VALUE_START:
       case LocateState.VALUE_END:
-      case LocateState.EMPTY_OBJECT:
         _throwUnexpected("EOF", "object");
 
       case LocateState.ELEMENT_FIRST_START:
       case LocateState.ELEMENT_START:
       case LocateState.ELEMENT_END:
-      case LocateState.EMPTY_ARRAY:
         _throwUnexpected("EOF", "array");
 
       case LocateState.EOF:
@@ -479,7 +472,6 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
     _throw("comment not allowed");
   };
   const _handleNumberSeparator = (token: MergedJsonToken, c: string): void => {
-    if (_substate === -1) _throw("a number cannot consist of only a negative sign");
     _state = ValueState.EMPTY;
     _location = NEXT_STATE_TABLE[_location];
     if (c === EOF) return _handleEOF(token);
@@ -524,28 +516,6 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
     if (c === "/") return _handleSlash(token);
     if (_location === LocateState.ROOT_END) {
       _throw(`non-whitespace character ${formatChar(c)} after JSON`);
-    }
-    if (_location === LocateState.EMPTY_ARRAY) {
-      if (c === "]") {
-        _state = ValueState.EMPTY;
-        _location = NEXT_STATE_TABLE[_stack.pop()!];
-        token.location = LOCATION_TABLE[_location];
-        token.type = "array";
-        token.subtype = "end";
-        return;
-      }
-      _throw("the first comma is treated as a trailing comma, more elements are not allowed");
-    }
-    if (_location === LocateState.EMPTY_OBJECT) {
-      if (c === "}") {
-        _state = ValueState.EMPTY;
-        _location = NEXT_STATE_TABLE[_stack.pop()!];
-        token.location = LOCATION_TABLE[_location];
-        token.type = "object";
-        token.subtype = "end";
-        return;
-      }
-      _throw("the first comma is treated as a trailing comma, more properties are not allowed");
     }
 
     if (c === '"' || (c === "'" && acceptSingleQuote)) {
@@ -937,7 +907,6 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
           token.subtype = "hex";
           return;
         }
-        if (c === "e" || c === "E") _throw("exponent not allowed in hexadecimal number");
         if (c === ".") _throw("fraction not allowed in hexadecimal number");
         if (_substate === false) _throw("the hexadecimal integer part cannot be empty");
         if (isNumberSeparator(c, acceptJson5Whitespace)) return _handleNumberSeparator(token, c);
@@ -1116,7 +1085,7 @@ function createJsonStreamParserInternal(option?: JsonOption, init?: any[]) {
       ]);
     },
   };
-}
+};
 
 export interface JsonStreamParser<Opt extends JsonOption = JsonOption> {
   feedOneTo: (destToken: object, c: string) => JsonToken<Opt>;
@@ -1130,13 +1099,14 @@ export interface JsonStreamParser<Opt extends JsonOption = JsonOption> {
 
   copy(): JsonStreamParser<Opt>;
 }
-export function createJsonStreamParser<Opt extends JsonOption = {}>(option?: Opt): JsonStreamParser<Opt> {
+export const createJsonStreamParser = <Opt extends JsonOption = {}>(option?: Opt): JsonStreamParser<Opt> => {
   return createJsonStreamParserInternal(option) as any;
-}
+};
 
-export function jsonStreamParse<Opt extends JsonOption = {}>(s: string, option?: Opt): JsonToken<Opt>[] {
+export const jsonStreamParse = <Opt extends JsonOption = {}>(s: string, option?: Opt): JsonToken<Opt>[] => {
   const parser = createJsonStreamParser(option);
+
   const ret = parser.feed(s);
   ret.push(parser.end());
   return ret;
-}
+};

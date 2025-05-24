@@ -1,9 +1,15 @@
-import { checkNormal } from "../util";
+import { checkNormal } from "../_util";
 
-checkNormal("null", null);
-checkNormal("true", true);
-checkNormal("false", false);
+test("normal[literal]", () => {
+  checkNormal("null", null);
+  checkNormal("true", true);
+  checkNormal("false", false);
 
-checkNormal("Null", undefined);
-checkNormal("True", undefined);
-checkNormal("False", undefined);
+  checkNormal("Null", undefined);
+  checkNormal("True", undefined);
+  checkNormal("False", undefined);
+
+  checkNormal("undefined", undefined);
+  checkNormal("Iull", undefined, { acceptNan: true });
+  checkNormal("Nnfinity", undefined, { acceptInfinity: true });
+});

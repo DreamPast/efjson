@@ -1,4 +1,4 @@
-import { JsonOption, JsonStreamParserError, jsonNormalParse, jsonStreamParse } from "efjson";
+import { JsonEventReceiver, JsonOption, JsonValue, jsonEventParse, jsonNormalParse, jsonPointer } from "../src/index";
 
 const makePrefix = (prefix?: any) => (prefix != undefined ? `[${prefix}]` : "");
 const compareJson = (lhs: any, rhs: any, prefix: string) => {
@@ -98,30 +98,71 @@ export const checkNormal = <Opt extends JsonOption = JsonOption>(s: string, expe
   }
   assertEq(ret, expect, s);
 };
-
-export const checkError = (s: string, expected_error = true, option?: JsonOption) => {
+export const checkEvent = <Opt extends JsonOption = JsonOption>(
+  s: string,
+  receiver: JsonEventReceiver<Opt>,
+  expect_error = false,
+  option?: Opt,
+) => {
   try {
-    try {
-      jsonStreamParse(s, option);
-    } catch (e) {
-      if (!(e instanceof JsonStreamParserError)) throw "wrong error";
-      if (expected_error) {
-        return e.message;
-      } else throw "expeted no error, but got: " + e.message;
-    }
-    if (expected_error) throw "expected error, but got nothing";
-    else return undefined;
+    jsonEventParse(s, receiver, option);
   } catch (e) {
+    if (expect_error) return;
     console.log(s);
     console.log(option);
-    throw e;
+    throw new Error("expected no error, but got: " + e);
+  }
+  if (expect_error) {
+    console.log(s);
+    console.log(option);
+    throw new Error("expected error, but got nothing");
   }
 };
-export const runTestCases = (testcases: (string | [string])[], option?: JsonOption) => {
-  for (const test of testcases)
-    if (typeof test == "string") checkError(test, true, option);
-    else checkError(test[0], false, option);
+export const checkPointerGet = (
+  expect: JsonValue | undefined,
+  obj: JsonValue,
+  path: string | string[],
+  start?: string | string[],
+) => {
+  let ret: any;
+  try {
+    ret = jsonPointer(obj, path, undefined, start);
+  } catch (e) {
+    if (expect === undefined) return;
+    console.log(obj);
+    console.log(path);
+    console.log(start);
+    throw new Error("expected no error, but got: " + e);
+  }
+  if (expect === undefined) {
+    console.log(obj);
+    console.log(path);
+    console.log(start);
+    throw new Error("expected error, but got nothing");
+  }
+  assertEq(ret, expect, obj);
 };
-export const makeRejectedTestcases = (testcases: (string | [string])[]) => {
-  return testcases.map((x) => (Array.isArray(x) ? x[0] : x));
+export const checkPointerSet = (
+  getter: undefined | (() => JsonValue),
+  obj: JsonValue,
+  path: string | string[],
+  value: JsonValue,
+  start?: string | string[],
+) => {
+  try {
+    jsonPointer(obj, path, value, start);
+  } catch (e) {
+    if (getter === undefined) return;
+    console.log(obj);
+    console.log(path);
+    console.log(start);
+    throw new Error("expected no error, but got: " + e);
+  }
+  if (getter === undefined) {
+    console.log(obj);
+    console.log(path);
+    console.log(start);
+    throw new Error("expected error, but got nothing");
+  }
+  assertEq(getter(), value, obj);
 };

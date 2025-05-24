@@ -53,14 +53,17 @@ const jsonPointerRelative = (
   path: string | string[],
   start: string | string[],
 ): [(string | [boolean, number])[], number] => {
+  if (typeof path === "string" && path.startsWith("/")) return [jsonPointerCompile(path), -1]; // absolute JSON pointer
   const arr: (string | [boolean, number])[] = typeof start === "string" ? jsonPointerCompile(start) : start.slice();
   if (typeof path !== "string") return [arr.concat(path), -1];
 
   let index = 0;
   for (const len = path.length; index < len && path[index] >= "0" && path[index] <= "9"; ++index) {}
-  const jump = tryToInteger(path.slice(0, index));
-  if (jump > arr.length) throw new JsonPointerError("cannot move up from root");
-  arr.length -= jump;
+  if (index !== 0) {
+    const jump = tryToInteger(path.slice(0, index));
+    if (jump > arr.length) throw new JsonPointerError("cannot move up from root");
+    arr.length -= jump;
+  }
 
   let offsetIdx = -1;
   if (path[index] === "+" || path[index] === "-") {
@@ -86,7 +89,7 @@ const jsonPointerRelative = (
   return [arr.concat(jsonPointerCompile(path.slice(index))), offsetIdx];
 };
 
-export function jsonPointerGet(obj: JsonValue, path: string | string[], start?: string | string[]): JsonValue {
+export const jsonPointerGet = (obj: JsonValue, path: string | string[], start?: string | string[]): JsonValue => {
   if (start == null) return jsonPointerMove(obj, typeof path === "string" ? jsonPointerCompile(path) : path);
 
   const [arr, flag] = jsonPointerRelative(path, start);
@@ -116,7 +119,7 @@ export function jsonPointerGet(obj: JsonValue, path: string | string[], start?: 
     obj = obj[index];
   }
   return jsonPointerMove(obj, arr as string[], flag + 1);
-}
+};
 export const jsonPointerSet = (
   obj: JsonValue,
   path: string | string[],
@@ -150,7 +153,7 @@ export const jsonPointerSet = (
     }
     obj = obj[index];
   }
-  jsonPointerMove(obj, arr as string[], flag + 1, arr.length - 1);
+  obj = jsonPointerMove(obj, arr as string[], flag + 1, arr.length - 1);
   const part = arr[arr.length - 1] as string;
   if (Array.isArray(obj)) obj[part === "-" ? obj.length : tryToInteger(part)] = value;
   else if (typeof obj === "object" && obj !== null) obj[part] = value;

@@ -7,7 +7,7 @@ export class JsonParserError extends Error {
 
 /**
  * JSON option
- * 
+ *
  * spec:
  *   - JSON
  *     @see https://www.ietf.org/rfc/rfc4627.txt

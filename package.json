@@ -1,8 +1,8 @@
 {
   "name": "efjson",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "a streaming and event-driven JSON parser (with support for JSON5 and JSONC)",
-  "main": "lib/efjson.js",
+  "main": "lib/efjson.mjs",
   "types": "lib/efjson.d.ts",
   "type": "module",
   "keywords": [
@@ -16,20 +16,24 @@
   "license": "MIT",
   "scripts": {
     "build": "tsc && rollup -c rollup.config.js",
-    "gen_mjs": "uglifyjs lib/efjson.js --config-file uglifyjs.json --output lib/efjson.min.mjs --module",
+    "gen_mjs": "uglifyjs lib/efjson.mjs --config-file uglifyjs.json --output lib/efjson.min.mjs --module",
     "build_mjs": "npm run build && npm run gen_mjs",
-    "format_lib": "prettier --ignore-path --write lib/**/*.js \"lib/**/*.d.ts\"",
+    "format_lib": "prettier --ignore-path --write lib/efjson.mjs \"lib/**/*.d.ts\"",
     "format": "prettier --write src/ test/ perf/",
-    "test": "tsx --tsconfig ./test/tsconfig.json ./test/test.ts",
-    "perf": "tsx --tsconfig ./test/tsconfig.json ./perf/test.ts",
-    "prepack": "npm run build_mjs && npm run format_lib"
+    "test": "jest",
+    "perf": "tsx ./perf/index.ts",
+    "prepack": "npm run build_mjs && npm run format_lib",
+    "postpack": "rimraf lib/ tmp/"
   },
   "devDependencies": {
-    "@rollup/plugin-typescript": "^12.1.2",
+    "@types/jest": "^29.5.14",
+    "jest": "^29.7.0",
     "prettier": "^3.5.3",
+    "rimraf": "^6.0.1",
     "rollup": "^4.41.0",
     "rollup-plugin-dts": "^6.2.1",
     "rollup-plugin-license": "^3.6.0",
+    "ts-jest": "^29.3.4",
     "tslib": "^2.8.1",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",

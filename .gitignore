@@ -8,8 +8,8 @@
 
 # JavaScript
 node_modules/
-dist/
 pnpm-lock.yaml
 lib/
+tmp/
 
 *.tgz

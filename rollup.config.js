@@ -34,8 +34,8 @@ SOFTWARE.
 
 export default [
   {
-    input: "dist/index.js",
-    output: { file: "lib/efjson.js", format: "es" },
+    input: "tmp/dist/index.js",
+    output: { file: "lib/efjson.mjs", format: "es" },
     plugins: [
       license({
         banner: { content: bannerContent },
@@ -43,7 +43,7 @@ export default [
     ],
   },
   {
-    input: "dist/index.d.ts",
+    input: "tmp/dist/index.d.ts",
     output: [{ file: "lib/efjson.d.ts", format: "es" }],
     plugins: [dts()],
   },

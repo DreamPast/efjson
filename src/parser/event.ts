@@ -199,7 +199,7 @@ export const createJsonEventEmitter = <Opt extends JsonOption = JsonOption>(
     if (token.done) {
       if (token.type === "null") return _endValue(null);
       else if (token.type === "true") return _endValue(true);
-      else if (token.type === "false") return _endValue(false);
+      else /* if (token.type === "false") */ return _endValue(false);
     }
   };
   const _feedNumber = (token: AllJsonToken & { type: "number" }) => {
@@ -287,28 +287,23 @@ export const createJsonEventEmitter = <Opt extends JsonOption = JsonOption>(
   const _feedObject = (token: AllJsonToken & { type: "object" }) => {
     let state = _state[_state.length - 1] as EventState._Object<JsonOption>;
     if (state._type === undefined) {
-      if (token.subtype === "end") {
-        _state.pop();
-        state = _state[_state.length - 1] as EventState._Object<JsonOption>;
-      } else {
-        state._type = "object";
-        state._save = _needSave() || state._receiver.save !== undefined;
-        state._saveValue = state._save || state._receiver.set !== undefined;
-        state._saveKey = state._saveValue || state._receiver.subscribeList !== undefined;
+      state._type = "object";
+      state._save = _needSave() || state._receiver.save !== undefined;
+      state._saveValue = state._save || state._receiver.set !== undefined;
+      state._saveKey = state._saveValue || state._receiver.subscribeList !== undefined;
 
-        state._object = {};
-        state._saveChild = state._saveKey;
+      state._object = {};
+      state._saveChild = state._saveKey;
 
-        state._receiver.start?.();
-        state._receiver.feed?.(token);
-        _state.push({
-          _receiver: state._receiver.keyReceiver ?? { type: "any" },
-        });
-        return;
-      }
+      state._receiver.start?.();
+      state._receiver.feed?.(token);
+      _state.push({
+        _receiver: state._receiver.keyReceiver ?? { type: "any" },
+      });
+      return;
     }
     state._receiver.feed?.(token);
-    if (token.subtype === "start") return;
+    /* if (token.subtype === "start") return; */
     if (token.subtype === "end") {
       if (state._key !== undefined) {
         // trailing comma
@@ -346,34 +341,28 @@ export const createJsonEventEmitter = <Opt extends JsonOption = JsonOption>(
   const _feedArray = (token: AllJsonToken & { type: "array" }): void => {
     let state = _state[_state.length - 1] as EventState._Array<JsonOption>;
     if (state._type === undefined) {
-      if (token.subtype === "end") {
-        // trailing comma
-        _state.pop();
-        state = _state[_state.length - 1] as EventState._Array<JsonOption>;
-      } else {
-        state._type = "array";
-        state._save = _needSave() || state._receiver.save !== undefined;
-        state._saveChild = state._save || state._receiver.set !== undefined;
-        state._index = 0;
-        state._array = [];
+      state._type = "array";
+      state._save = _needSave() || state._receiver.save !== undefined;
+      state._saveChild = state._save || state._receiver.set !== undefined;
+      state._index = 0;
+      state._array = [];
 
-        state._receiver.start?.();
-        state._receiver.feed?.(token);
+      state._receiver.start?.();
+      state._receiver.feed?.(token);
 
-        let receiver: JsonEventReceiver<JsonOption> | undefined;
-        if (state._receiver.subscribeList !== undefined)
-          for (const func of state._receiver.subscribeList) {
-            receiver = func(state._index);
-            if (receiver === undefined) break;
-          }
-        _state.push({
-          _receiver: receiver ?? { type: "any" },
-        });
-        return;
-      }
+      let receiver: JsonEventReceiver<JsonOption> | undefined;
+      if (state._receiver.subscribeList !== undefined)
+        for (const func of state._receiver.subscribeList) {
+          receiver = func(state._index);
+          if (receiver === undefined) break;
+        }
+      _state.push({
+        _receiver: receiver ?? { type: "any" },
+      });
+      return;
     }
     state._receiver.feed?.(token);
-    if (token.subtype === "start") return;
+    /* if (token.subtype === "start") return; */
     if (token.subtype === "end") {
       if (state._child !== undefined) {
         if (state._save) state._array[state._index] = state._child!; // trailing comma
@@ -514,21 +503,11 @@ export const createJsonEventParser = <Opt extends JsonOption = JsonOption>(
 };
 
 export const jsonEventParse = <Opt extends JsonOption = JsonOption>(
-  str: Iterable<string>,
+  str: string,
   receiver: JsonEventReceiver<Opt>,
   option?: Opt,
 ) => {
   const parser = createJsonEventParser(receiver, option);
-  if (typeof str === "string") parser.feed(str);
-  else for (const s of str) parser.feed(s);
-  parser.end();
-};
-export const jsonEventParseAsync = async <Opt extends JsonOption = JsonOption>(
-  str: AsyncIterable<string>,
-  receiver: JsonEventReceiver<Opt>,
-  option?: Opt,
-) => {
-  const parser = createJsonEventParser(receiver, option);
-  for await (const s of str) parser.feed(s);
+  parser.feed(str);
   parser.end();
 };
