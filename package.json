@@ -1,6 +1,6 @@
 {
   "name": "efjson",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "a streaming and event-driven JSON parser (with support for JSON5 and JSONC)",
   "main": "lib/efjson.mjs",
   "types": "lib/efjson.d.ts",
@@ -22,7 +22,7 @@
     "format": "prettier --write src/ test/ perf/",
     "test": "jest",
     "perf": "tsx ./perf/index.ts",
-    "prepack": "npm run build_mjs && npm run format_lib",
+    "prepack": "npm run build && npm run format_lib",
     "postpack": "rimraf lib/ tmp/"
   },
   "devDependencies": {
