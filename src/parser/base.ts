@@ -148,7 +148,7 @@ export const JSON_FULL_OPTION = Object.freeze({
 
 export const parseJsonNumber = (str: string): number => {
   let radix: number | undefined = undefined;
-  const start = +(str[0] === "+" || str[0] === "-");
+  const start = 0 | ((str[0] === "+" || str[0] === "-") as unknown as number);
   if (str[start] === "0")
     /* compatible with JSON5 */
     switch (str[start + 1]) {

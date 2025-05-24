@@ -151,7 +151,7 @@ export const createJsonNormalEmitter = <Opt extends JsonOption = JsonOption>() =
         _endValue((state as NormalState._String)._list.join(""));
         state = _state[_state.length - 1];
       } else if (state._type === undefined)
-        if ((token as any).subtype === "end" && token.type !== "string") {
+        if (token.subtype === "end" && token.type !== "string") {
           // trailing comma
           _state.pop();
           state = _state[_state.length - 1];

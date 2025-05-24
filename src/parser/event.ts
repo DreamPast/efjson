@@ -180,7 +180,7 @@ export const createJsonEventEmitter = <Opt extends JsonOption = JsonOption>(
   const _endValue = (value: JsonValue): void => {
     const state = _state.pop()!;
     state._receiver.end?.();
-    (state._receiver.save as any)?.(value);
+    (state._receiver.save as undefined | ((val: JsonValue) => void))?.(value);
     if (_state.length !== 0) {
       (_state[_state.length - 1] as EventState._Struct<JsonOption>)._child = value;
     }
@@ -195,7 +195,7 @@ export const createJsonEventEmitter = <Opt extends JsonOption = JsonOption>(
       state._type = token.type;
       state._receiver.start?.();
     }
-    (state._receiver as any).feed?.(token);
+    (state._receiver.feed as undefined | ((token: JsonToken) => void))?.(token);
     if (token.done) {
       if (token.type === "null") return _endValue(null);
       else if (token.type === "true") return _endValue(true);
@@ -275,7 +275,7 @@ export const createJsonEventEmitter = <Opt extends JsonOption = JsonOption>(
           type: "string",
           subtype: "escape_unicode",
           index: token.index as any,
-          escaped_value: token.escaped_value as any,
+          escaped_value: token.escaped_value,
           character: token.character,
         });
       if (token.escaped_value !== undefined) {
@@ -399,7 +399,7 @@ export const createJsonEventEmitter = <Opt extends JsonOption = JsonOption>(
         _endValue(parseJsonNumber(str));
         state = _state[_state.length - 1];
       } else if ((state as EventState._String<JsonOption>)._isIdentifier && token.type !== "identifier") {
-        (state._receiver as any).feed?.({
+        (state._receiver.feed as undefined | ((token: JsonToken) => void))?.({
           location: "key",
           type: "string",
           subtype: "end",
@@ -408,7 +408,7 @@ export const createJsonEventEmitter = <Opt extends JsonOption = JsonOption>(
         _endValue((state as EventState._String<JsonOption>)._list.join(""));
         state = _state[_state.length - 1];
       } else if (state._type === undefined)
-        if ((token as any).subtype === "end" && token.type !== "string") {
+        if (token.subtype === "end" && token.type !== "string") {
           // trailing comma
           _state.pop();
           state = _state[_state.length - 1];
