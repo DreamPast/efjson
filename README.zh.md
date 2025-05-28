@@ -1,6 +1,6 @@
 # efjson: 基于流的、事件响应式的 JSON 解析器
 
-[English](./README.md) [简体中文](./README_zh_CN.md)
+[English](./README.md) [简体中文](./README.zh.md)
 
 ## 特色
 

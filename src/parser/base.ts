@@ -55,7 +55,7 @@ export type JsonOption = {
    * whether to accept JSON5 string escape
    * @example '"\\x01"', '\\v', '\\0'
    */
-  accpetJson5StringEscape?: boolean;
+  acceptJson5StringEscape?: boolean;
 
   // << number >>
   /**
@@ -106,12 +106,12 @@ export type JsonOption = {
   /**
    * whether to accept multi-line comment
    */
-  accpetMultiLineComment?: boolean;
+  acceptMultiLineComment?: boolean;
 };
 export const JSONC_OPTION = Object.freeze({
   // << comment >>
   acceptSingleLineComment: true,
-  accpetMultiLineComment: true,
+  acceptMultiLineComment: true,
 });
 export const JSON5_OPTION = Object.freeze({
   ...JSONC_OPTION,
@@ -129,7 +129,7 @@ export const JSON5_OPTION = Object.freeze({
   // << string >>
   acceptSingleQuote: true,
   acceptMultilineString: true,
-  accpetJson5StringEscape: true,
+  acceptJson5StringEscape: true,
 
   // << number >>
   acceptPositiveSign: true,

@@ -1,6 +1,6 @@
 # A Streaming and Event-driven JSON Parser
 
-[English](./README.md) [简体中文](./README_zh_CN.md)
+[English](./README.md) [简体中文](./README.zh.md)
 
 ## Features
 

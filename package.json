@@ -1,6 +1,6 @@
 {
   "name": "efjson",
-  "version": "0.12.1",
+  "version": "0.12.2",
   "description": "a streaming and event-driven JSON parser (with support for JSON5 and JSONC)",
   "main": "lib/efjson.mjs",
   "types": "lib/efjson.d.ts",

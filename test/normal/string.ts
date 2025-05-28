@@ -85,11 +85,11 @@ test("normal[string]", () => {
       ['"\\xF1"', "\xF1"],
     ]) {
       checkNormal(s[0], undefined);
-      checkNormal(s[0], s[1], { accpetJson5StringEscape: true });
+      checkNormal(s[0], s[1], { acceptJson5StringEscape: true });
     }
     for (const s of ['"\\x"', '"\\x1"', '"\\xF"']) {
       checkNormal(s, undefined);
-      checkNormal(s, undefined, { accpetJson5StringEscape: true });
+      checkNormal(s, undefined, { acceptJson5StringEscape: true });
     }
   }
 

@@ -23,7 +23,7 @@ describe("normal[number]", () => {
   checkNormal("+", undefined, { acceptPositiveSign: true });
   checkNormal("1//", undefined);
   checkNormal("1//", 1, { acceptSingleLineComment: true });
-  checkNormal("1/**/", 1, { accpetMultiLineComment: true });
+  checkNormal("1/**/", 1, { acceptMultiLineComment: true });
   checkNormal("1 ", 1);
 
   checkNormal("1.z", undefined);
