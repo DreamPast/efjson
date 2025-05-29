@@ -30,6 +30,9 @@ const compareJson = (lhs: any, rhs: any, prefix: string) => {
   throw new Error(`${prefix}value mismatch, ${lhs} != ${rhs}`);
 };
 
+export const assertUnreachable = (msg?: string) => {
+  throw new Error(`unreachable code${msg ? " - " + msg : ""}`);
+};
 export const assertEq = (got: any, expect: any, prefix?: any) => {
   compareJson(got, expect, makePrefix(prefix));
 };

@@ -30,8 +30,9 @@ const json = `
 `;
 
 jsonEventParse(json, {
-  type: "object",
-  set(key, value) {
-    console.log(key, value);
+  object: {
+    set(key, value) {
+      console.log(key, value);
+    },
   },
 });

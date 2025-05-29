@@ -2,8 +2,8 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "paths": {
-      "efjson": ["../src/index"],
+      "efjson": ["../src/index"]
     }
   },
-  "include": ["./**/*.ts"],
+  "include": ["./**/*.ts"]
 }

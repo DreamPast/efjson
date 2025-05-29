@@ -1,32 +1,28 @@
 import {
   createJsonEventParser,
   JSON5_OPTION,
+  JsonDefaultEventReceiver,
   jsonEventEmit,
   jsonEventParse,
   JsonEventReceiver,
   JsonOption,
   jsonStreamParse,
 } from "../src/index";
-import { assertEq, checkEvent, combine } from "./_util";
+import { assertEq, assertUnreachable, checkEvent } from "./_util";
 
 describe("event", () => {
   test("any", () => {
     {
       let saved: any;
       const receiver: JsonEventReceiver = {
-        type: "any",
-        dict: {
-          string: {
-            type: "string",
-            save: (value: string) => {
-              saved = +value;
-            },
+        string: {
+          save: (value: string) => {
+            saved = +value;
           },
-          number: {
-            type: "number",
-            save: (value: number) => {
-              saved = "" + value;
-            },
+        },
+        number: {
+          save: (value: number) => {
+            saved = "" + value;
           },
         },
       };
@@ -43,19 +39,14 @@ describe("event", () => {
     {
       let saved: any;
       const receiver: JsonEventReceiver = {
-        type: "any",
-        dict: {
-          string: {
-            type: "string",
-            save: (value: string) => {
-              saved = value;
-            },
+        string: {
+          save: (value: string) => {
+            saved = value;
           },
-          number: {
-            type: "number",
-            save: (value: number) => {
-              saved = value;
-            },
+        },
+        number: {
+          save: (value: number) => {
+            saved = value;
           },
         },
       };
@@ -67,35 +58,6 @@ describe("event", () => {
       saved = undefined;
       jsonEventParse('"12"', receiver);
       assertEq(typeof saved, "string");
-    }
-
-    {
-      let saved: any;
-      const option: JsonEventReceiver = {
-        type: "any",
-        save(val) {
-          saved = { type: "any", value: val };
-        },
-        dict: {
-          number: {
-            type: "number",
-            save: (value: number) => {
-              saved = { type: "number", value };
-            },
-          },
-          string: {
-            type: "string",
-          },
-        },
-      };
-
-      saved = undefined;
-      jsonEventParse("12", option);
-      assertEq(saved.type, "number");
-
-      saved = undefined;
-      jsonEventParse('"12"', option);
-      assertEq(saved.type, "any");
     }
   });
 
@@ -124,35 +86,37 @@ No \\\\n's! \\x40",
     jsonEventParse(
       str,
       {
-        type: "object",
-        subscribeList: [
-          (key) => {
+        object: {
+          subreceiver: (key) => {
             if (["hexadecimal", "leadingDecimalPoint", "andTrailing", "positiveSign", "nan"].includes(key)) {
-              return { type: "number" };
+              return { number: {} };
             } else if (["andIn", "infinity"].includes(key)) {
               return {
-                type: "array",
-                subscribeList: [() => undefined, () => ({ type: key === "andIn" ? "string" : "number" })],
-                save() {},
+                array: {
+                  subreceiver: () => ({ [key === "andIn" ? "string" : "number"]: {} }),
+                  save() {},
+                },
               };
             } else if (key === "dict" || key === "dict2") {
               return {
-                type: "object",
-                subscribeList: [() => undefined, (k) => ({ type: k as any })],
-                save() {},
+                object: {
+                  subreceiver: (k) => ({ [k as any]: {} }),
+                  save() {},
+                },
               };
             } else {
-              return { type: "string" };
+              return { ...JsonDefaultEventReceiver, save() {} };
             }
           },
-        ],
+        },
       },
       JSON5_OPTION,
     );
 
     jsonEventEmit(jsonStreamParse("{a:1,b:2,\\u0032:3,}", JSON5_OPTION), {
-      type: "object",
-      keyReceiver: { type: "string", save() {}, feed() {} },
+      object: {
+        keyReceiver: JsonDefaultEventReceiver,
+      },
     });
   });
 
@@ -168,10 +132,11 @@ No \\\\n's! \\x40",
         jsonEventParse(
           "0x12",
           {
-            type: "number",
-            save(num) {
-              done = true;
-              assertEq(num, 0x12);
+            number: {
+              save(num) {
+                done = true;
+                assertEq(num, 0x12);
+              },
             },
           },
           option,
@@ -183,10 +148,11 @@ No \\\\n's! \\x40",
         jsonEventParse(
           "0o12",
           {
-            type: "number",
-            save(num) {
-              done = true;
-              assertEq(num, 0o12);
+            number: {
+              save(num) {
+                done = true;
+                assertEq(num, 0o12);
+              },
             },
           },
           option,
@@ -198,10 +164,11 @@ No \\\\n's! \\x40",
         jsonEventParse(
           "0b10110",
           {
-            type: "number",
-            save(num) {
-              done = true;
-              assertEq(num, 0b10110);
+            number: {
+              save(num) {
+                done = true;
+                assertEq(num, 0b10110);
+              },
             },
           },
           option,
@@ -212,23 +179,30 @@ No \\\\n's! \\x40",
   });
 
   test("mismatch", () => {
-    const list = [
-      ["null", "null"],
-      ["1", "number"],
-      ["true", "boolean"],
-      ["false", "boolean"],
-      ["[]", "array"],
-      ["{}", "object"],
-    ] as const;
+    const list: [string, string[]][] = [
+      ["null", ["null"]],
+      ["1", ["integer", "number"]],
+      ["+1", ["integer", "number"]],
+      ["-1", ["integer", "number"]],
+      ["-0", ["number"]],
+      ["1.2", ["number"]],
+      ["+1.2", ["number"]],
+      ["-1.2", ["number"]],
+      ["true", ["boolean"]],
+      ["false", ["boolean"]],
+      ['"A"', ["string"]],
+      ["[]", ["array"]],
+      ["{}", ["object"]],
+    ];
     for (let i = 0; i < list.length; i++)
       for (let j = 0; j < list.length; j++) {
-        checkEvent(list[i][0], { type: list[j][1] }, list[i][1] !== list[j][1], JSON5_OPTION);
+        checkEvent(list[i][0], { [list[j][1][0]]: { save() {} } }, !list[i][1].includes(list[j][1][0]), JSON5_OPTION);
       }
   });
 
   test("position", () => {
     const getPosInfo = (s: string) => {
-      const parser = createJsonEventParser({ type: "any" });
+      const parser = createJsonEventParser({ number: {} });
       parser.feed(s);
       return {
         line: parser.line,
@@ -241,5 +215,71 @@ No \\\\n's! \\x40",
     assertEq(getPosInfo("\r\r1"), { line: 3, column: 2, position: 3 });
     assertEq(getPosInfo("\r1"), { line: 2, column: 2, position: 2 });
     assertEq(getPosInfo("\n1"), { line: 2, column: 2, position: 2 });
+  });
+
+  test("number", () => {
+    checkEvent("1.2", {
+      save() {
+        assertUnreachable("parent");
+      },
+      number: {
+        save(val) {
+          assertEq(val, 1.2);
+        },
+      },
+      integer: {
+        save() {
+          assertUnreachable("child");
+        },
+      },
+    });
+    checkEvent("1.2", {
+      save(val) {
+        assertEq(val, 1.2);
+      },
+      integer: {
+        save() {
+          assertUnreachable("child");
+        },
+      },
+      number: {},
+    });
+
+    checkEvent("1", {
+      save() {
+        assertUnreachable("parent");
+      },
+      number: {
+        save() {
+          assertUnreachable("child");
+        },
+      },
+      integer: {
+        save(val) {
+          assertEq(val, 1n);
+        },
+      },
+    });
+    checkEvent("1", {
+      save(val) {
+        assertEq(val, 1);
+      },
+      number: {
+        save() {
+          assertUnreachable("child");
+        },
+      },
+      integer: {},
+    });
+  });
+
+  test("identifier", () => {
+    checkEvent(`{\\u1234:11,A:12}`, { object: { keyReceiver: { feed() {} } } }, true, JSON5_OPTION);
+    checkEvent(
+      `{\\u1234:11,A:12}`,
+      { object: { keyReceiver: { feed() {}, string: { save() {} } } } },
+      false,
+      JSON5_OPTION,
+    );
   });
 });

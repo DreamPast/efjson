@@ -25,11 +25,11 @@ const perfArray = () => {
   }, "steam (save token)");
 
   measurePrint(() => {
-    jsonEventParse(s, { type: "array", save() {} });
+    jsonEventParse(s, { array: { save() {} } });
   }, "event (save)");
 
   measurePrint(() => {
-    jsonEventParse(s, { type: "array" });
+    jsonEventParse(s, { array: {} });
   }, "event (not save)");
 
   measurePrint(() => {
@@ -74,11 +74,11 @@ const perfObject = () => {
   }, "steam (save token)");
 
   measurePrint(() => {
-    jsonEventParse(s, { type: "object", save() {} });
+    jsonEventParse(s, { object: { save() {} } });
   }, "event (save)");
 
   measurePrint(() => {
-    jsonEventParse(s, { type: "object" });
+    jsonEventParse(s, { object: {} });
   }, "event (not save)");
 
   measurePrint(() => {
@@ -105,11 +105,11 @@ const perfString = () => {
   }, "steam (save token)");
 
   measurePrint(() => {
-    jsonEventParse(s, { type: "string", save() {} });
+    jsonEventParse(s, { string: { save() {} } });
   }, "event (save)");
 
   measurePrint(() => {
-    jsonEventParse(s, { type: "string" });
+    jsonEventParse(s, { string: {} });
   }, "event (not save)");
 
   measurePrint(() => {
@@ -133,11 +133,11 @@ const perfRecursiveArray = () => {
   }, "steam (save token)");
 
   measurePrint(() => {
-    jsonEventParse(s, { type: "array", save() {} });
+    jsonEventParse(s, { array: { save() {} } });
   }, "event (save)");
 
   measurePrint(() => {
-    jsonEventParse(s, { type: "array" });
+    jsonEventParse(s, { array: {} });
   }, "event (not save)");
 
   measurePrint(() => {
