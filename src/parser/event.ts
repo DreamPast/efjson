@@ -78,7 +78,6 @@ namespace EventState {
     _start: boolean;
   };
 
-  export type _Unknown<Opt extends JsonOption> = _StateBase<Opt> & {};
   export type _StateLess<Opt extends JsonOption> = _StateBase<Opt> & {};
   export type _Number<Opt extends JsonOption> = _StateBase<Opt> & {
     _save: boolean;
@@ -120,12 +119,7 @@ namespace EventState {
   };
   export type _Struct<Opt extends JsonOption> = _Object<Opt> | _Array<Opt>;
 
-  export type _State<Opt extends JsonOption> =
-    | _Unknown<Opt>
-    | _StateLess<Opt>
-    | _Number<Opt>
-    | _String<Opt>
-    | _Struct<Opt>;
+  export type _State<Opt extends JsonOption> = _StateLess<Opt> | _Number<Opt> | _String<Opt> | _Struct<Opt>;
 }
 const parseJsonInteger = (str: string): bigint | undefined => {
   try {
@@ -389,7 +383,7 @@ export const createJsonEventEmitter = <Opt extends JsonOption = JsonOption>(
         if (_spec === SpecialParse.Number) {
           if (token.type !== "number") {
             if ((state as EventState._Number<Opt>)._save) {
-              const state = _stack.pop()!;
+              _stack.pop();
               const str = (state as EventState._Number<Opt>)._list.join("");
               let saveFloat = true;
               if (state._receiver["integer"]) {
