@@ -299,6 +299,7 @@ export const createJsonEventEmitter = <Opt extends JsonOption = JsonOption>(
         _receiver: state._keyReceiver ?? JsonDefaultEventReceiver,
         _start: false,
       } as EventState._String<Opt>);
+      state._receiver.feed?.(token);
       return;
     }
     state._receiver.feed?.(token);
@@ -311,10 +312,9 @@ export const createJsonEventEmitter = <Opt extends JsonOption = JsonOption>(
       }
       _endValue(state._object!, state._receiver["object"]?.save);
     } else if (token.subtype === "next") {
-      state._next?.();
-
       if (state._save) (state._object as JsonObject)[state._key!] = state._child!;
       state._set?.(state._key!, state._child!);
+      state._next?.();
 
       state._key = state._child = undefined;
       state._saveChild = state._saveKey;
@@ -364,13 +364,10 @@ export const createJsonEventEmitter = <Opt extends JsonOption = JsonOption>(
       _endValue(state._array, state._receiver["array"]?.save);
     } else {
       /* if(token.subtype === 'next') */
-      state._next?.(state._index + 1);
-
       if (state._save) (state._array as JsonArray)[state._index] = state._child!;
       state._set?.(state._index, state._child!);
-
       state._child = undefined;
-      ++state._index;
+      state._next?.(++state._index);
       _stack.push({ _receiver: state._subreceiver?.(state._index) ?? JsonDefaultEventReceiver, _start: false });
     }
   };
