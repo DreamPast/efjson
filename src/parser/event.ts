@@ -1,6 +1,6 @@
 import { JsonArray, JsonObject, JsonValue } from "../base";
 import { JsonOption, JsonParserError, parseJsonNumber } from "./base";
-import { createJsonStreamParser, JsonToken } from "./stream";
+import { createJsonStreamParser, JsonStreamParserBase, JsonToken, patchJsonStreamParserBase } from "./stream";
 
 export class JsonEventParserError extends JsonParserError {
   constructor(msg: string) {
@@ -461,13 +461,9 @@ export const jsonEventEmit = <Opt extends JsonOption = JsonOption>(
 /**
  * Input JSON string and emit events (equivalent to combine `JsonStreamParser` and `JsonEventEmiiter`)
  */
-export interface JsonEventParser {
+export interface JsonEventParser extends JsonStreamParserBase {
   feed: (s: string) => void;
   end: () => void;
-
-  get position(): number;
-  get line(): number;
-  get column(): number;
 }
 export const createJsonEventParser = <Opt extends JsonOption = JsonOption>(
   receiver: JsonEventReceiver<Opt>,
@@ -476,23 +472,17 @@ export const createJsonEventParser = <Opt extends JsonOption = JsonOption>(
   const _parser = createJsonStreamParser(option);
   const _emitter = createJsonEventEmitter(receiver);
   const _token = {};
-  return {
-    feed(s: string) {
-      for (const c of s) _emitter.feed(_parser.feedOneTo(_token, c));
+  return patchJsonStreamParserBase(
+    {
+      feed(s: string) {
+        for (const c of s) _emitter.feed(_parser.feedOneTo(_token, c));
+      },
+      end() {
+        _emitter.feed(_parser.end());
+      },
     },
-    end() {
-      _emitter.feed(_parser.end());
-    },
-    get position() {
-      return _parser.position;
-    },
-    get line() {
-      return _parser.line;
-    },
-    get column() {
-      return _parser.column;
-    },
-  };
+    _parser,
+  );
 };
 
 export const jsonEventParse = <Opt extends JsonOption = JsonOption>(
@@ -500,7 +490,9 @@ export const jsonEventParse = <Opt extends JsonOption = JsonOption>(
   receiver: JsonEventReceiver<Opt>,
   option?: Opt,
 ) => {
-  const parser = createJsonEventParser(receiver, option);
-  parser.feed(str);
-  parser.end();
+  const emitter = createJsonEventEmitter(receiver);
+  const baseParser = createJsonStreamParser(option);
+  const token = {};
+  for (const c of str) emitter.feed(baseParser.feedOneTo(token, c));
+  emitter.feed(baseParser.end());
 };

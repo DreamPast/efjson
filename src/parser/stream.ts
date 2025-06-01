@@ -11,12 +11,12 @@ const isWhitespace = (c: string, fitJson5?: boolean) => {
 };
 const isNextLine = (c: string) => "\n\u2028\u2029\r".includes(c);
 const isNumberSeparator = (c: string, fitJson5?: boolean) => isWhitespace(c, fitJson5) || "\0,]}/".includes(c);
-const isControl = (c: string) => c >= "\x00" && c <= "\x1F";
+const isControl = (c: string) => (c >= "\x00" && c <= "\x1F") || c == "\x7F";
 const isHex = (c: string) => (c >= "0" && c <= "9") || (c >= "a" && c <= "f") || (c >= "A" && c <= "F");
 const isIdentifierStart = (c: string) => /[$_\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]/u.test(c);
 const isIdentifierNext = (c: string) => isIdentifierStart(c) || /[\p{Mn}\p{Mc}\p{Nd}\p{Pc}\u200C\u200D]/u.test(c);
 
-const ESCAPE_TABLE: { [k: string]: string | undefined } = {
+const ESCAPE_TABLE: Record<string, string | undefined> = {
   '"': '"',
   "\\": "\\",
   "/": "/",
@@ -26,11 +26,7 @@ const ESCAPE_TABLE: { [k: string]: string | undefined } = {
   r: "\r",
   t: "\t",
 };
-const ESCAPE_TABLE2: { [k: string]: string | undefined } = {
-  "'": "'",
-  v: "\v",
-  0: EOF,
-};
+const ESCAPE_TABLE2: Record<string, string | undefined> = { "'": "'", v: "\v", 0: EOF };
 
 const formatChar = (c: string) => {
   const code = c.codePointAt(0)!;
@@ -233,15 +229,59 @@ const NEXT_STATE_TABLE: LocationState[] = [
 ];
 
 export class JsonStreamParserError extends JsonParserError {
-  constructor(msg: string) {
-    super(msg);
+  character: string;
+  position: number;
+  line: number;
+  column: number;
+
+  constructor(baseMsg: string, character: string, position: number, line: number, column: number) {
+    super(baseMsg, `At ${line}:${column}(${position}), Character ${formatChar(character)} - ${baseMsg}`);
     this.name = "StreamJsonParserError";
+    this.character = character;
+    this.position = position;
+    this.line = line;
+    this.column = column;
   }
 }
 
+// << other >>
+const Err_CommentForbidden = "comment not allowed";
+const Err_Eof = "structure broken because of EOF";
+const Err_NonwhitespaceAfterEnd = "unexpected non-whitespace character after end of JSON";
+const Err_TrailingCommaForbidden = "trailing comma not allowed";
+const Err_Unexpected = "unexpected character";
+const Err_WrongBracket = "wrong bracket";
+const Err_WrongColon = "colon only allowed between property name and value";
+// << array >>
+const Err_CommaInEmptyArray = "empty array with trailing comma not allowed";
+// << object >>
+const Err_BadIdentifierEscape = 'the escape sequence for an identifier must start with "/u"';
+const Err_BadPropertyNameInObject = "property name must be a string";
+const Err_CommaInEmptyObject = "empty object with trailing comma not allowed";
+const Err_EmptyValueInObject = "unexpected empty value in object";
+const Err_ExpectedColon = "colon expected between property name and value";
+const Err_InvalidIdentifier = "invalid identifier in JSON string";
+const Err_InvalidIdentifierEscape = "invalid identifier escape sequence in JSON5 identifier";
+const Err_RepeatedColon = "repeated colon not allowed";
+// << string >>
+const Err_BadEscapeInString = "bad escape sequence in JSON string";
+const Err_BadHexEscapeInString = "bad hex escape sequence in JSON string";
+const Err_BadUnicodeEscapeInString = "bad Unicode escape sequence in JSON string";
+const Err_ControlCharacterForbiddenInString = "control character not allowed in JSON string";
+const Err_SingleQuoteForbidden = "single quote not allowed";
+// << number >>
+const Err_EmptyExponentPart = "the exponent part of a number cannot be empty";
+const Err_EmptyFractionPart = "the fraction part of a number cannot be empty";
+const Err_EmptyIntegerPart = "the integer part of a number cannot be empty";
+const Err_ExponentNotAllowed = "exponent part not allowed in non-decimal number";
+const Err_FractionNotAllowed = "fraction part not allowed in non-decimal number";
+const Err_LeadingZeroForbidden = "leading zero not allowed";
+const Err_PositiveSignForbidden = "positive sign not allowed";
+const Err_UnexpectedInNumber = "unexpected character in number";
+
 const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
   option = option || {};
-  // << white space >>
+  // << whitespace >>
   const acceptJson5Whitespace = option.acceptJson5Whitespace;
   // << array >>
   const acceptTrailingCommaInArray = option.acceptTrailingCommaInArray;
@@ -267,8 +307,8 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
   //
 
   let _position = 0;
-  let _line = 1;
-  let _column = 1;
+  let _line = 0;
+  let _column = 0;
   let _meetCr = false;
 
   /**
@@ -325,15 +365,8 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
 
   if (init !== undefined) [_position, _line, _column, _meetCr, _location, _state, _substate, _substate2, _stack] = init;
 
-  function _throw(msg?: string): never {
-    throw new JsonStreamParserError(`JsonParser Error at (${_position})${_line}:${_column} - ${msg}`);
-  }
-  function _throwUnexpected(s: string, stage?: string): never {
-    throw new JsonStreamParserError(
-      `JsonParser Error at (${_position})${_line}:${_column} - unexpected ${s}${
-        stage ? " while parsing " + stage : ""
-      }`,
-    );
+  function _throw(c: string, msg: string): never {
+    throw new JsonStreamParserError(msg, c, _position, _line, _column);
   }
 
   const _handleComma = (token: MergedJsonToken) => {
@@ -348,9 +381,9 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
       token.subtype = "next";
       return;
     }
-    if (_location === LocationState.ELEMENT_FIRST_START) _throw("extra commas not allowed in empty array");
-    if (_location === LocationState.VALUE_START) _throw("unpexted empty value");
-    _throwUnexpected("comma");
+    if (_location === LocationState.ELEMENT_FIRST_START) _throw(",", Err_TrailingCommaForbidden);
+    if (_location === LocationState.VALUE_START) _throw(",", Err_EmptyValueInObject);
+    _throw(",", Err_Unexpected);
   };
   const _handleArrayEnd = (token: MergedJsonToken) => {
     if (
@@ -366,8 +399,8 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
       return;
     }
 
-    if (_location === LocationState.ELEMENT_START) _throw("extra commas not allowed in array");
-    _throw("bad closing square bracket");
+    if (_location === LocationState.ELEMENT_START) _throw("]", Err_CommaInEmptyArray);
+    _throw("]", Err_WrongBracket);
   };
   const _handleObjectEnd = (token: MergedJsonToken): void => {
     if (
@@ -383,32 +416,17 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
       return;
     }
 
-    if (_location === LocationState.KEY_START) _throw("extra commas not allowed in object");
-    _throw("bad closing curly brace");
+    if (_location === LocationState.KEY_START) _throw("]", Err_CommaInEmptyObject);
+    _throw("}", Err_WrongBracket);
   };
   const _handleEOF = (token: MergedJsonToken) => {
-    switch (_location) {
-      case LocationState.ROOT_START:
-      case LocationState.ROOT_END:
-        token.type = "eof";
-        token.subtype = undefined;
-        _location = LocationState.EOF;
-        return;
-      case LocationState.KEY_FIRST_START:
-      case LocationState.KEY_START:
-      case LocationState.KEY_END:
-      case LocationState.VALUE_START:
-      case LocationState.VALUE_END:
-        _throwUnexpected("EOF", "object");
-
-      case LocationState.ELEMENT_FIRST_START:
-      case LocationState.ELEMENT_START:
-      case LocationState.ELEMENT_END:
-        _throwUnexpected("EOF", "array");
-
-      case LocationState.EOF:
-        _throw("unexpected EOF after EOF");
+    if (_location === LocationState.ROOT_START || _location === LocationState.ROOT_END) {
+      token.type = "eof";
+      token.subtype = undefined;
+      _location = LocationState.EOF;
+      return;
     }
+    _throw(EOF, Err_Eof);
   };
   const _handleSlash = (token: MergedJsonToken) => {
     if (acceptSingleLineComment || acceptMultiLineComment) {
@@ -418,7 +436,7 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
       token.subtype = "may_start";
       return;
     }
-    _throw("comment not allowed");
+    _throw("/", Err_CommentForbidden);
   };
   const _handleNumberSeparator = (token: MergedJsonToken, c: string): void => {
     _state = ValueState.EMPTY;
@@ -452,7 +470,7 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
       } else token.done = undefined;
       return;
     }
-    _throw(`expected '${dc}' while parsing ${literal}, but got ${formatChar(c)}`);
+    _throw(c, Err_Unexpected);
   };
 
   const _stepEmpty = (token: MergedJsonToken, c: string): void => {
@@ -463,7 +481,7 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
     }
     if (c === EOF) return _handleEOF(token);
     if (c === "/") return _handleSlash(token);
-    if (_location === LocationState.ROOT_END) _throw(`non-whitespace character ${formatChar(c)} after JSON`);
+    if (_location === LocationState.ROOT_END) _throw(c, Err_NonwhitespaceAfterEnd);
 
     if (c === '"' || (c === "'" && acceptSingleQuote)) {
       _state = ValueState.STRING;
@@ -472,7 +490,7 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
       token.subtype = "start";
       return;
     }
-    if (c === "'") _throw("single quote not allowed");
+    if (c === "'") _throw(c, Err_SingleQuoteForbidden);
     if (_location === LocationState.KEY_FIRST_START || _location === LocationState.KEY_START) {
       if (acceptIdentifierKey)
         if (isIdentifierStart(c)) {
@@ -491,8 +509,7 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
           token.done = undefined;
           return;
         }
-      if (_location === LocationState.KEY_FIRST_START && c === ",") _throw("extra commas not allowed in empty object");
-      if (c !== "}") _throw("property name must be a string");
+      if (c !== "}") _throw(c, Err_BadPropertyNameInObject);
     }
 
     if (c === ":") {
@@ -504,11 +521,9 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
         token.subtype = "value_start";
         return;
       }
-      if (_location === LocationState.VALUE_START) _throwUnexpected("repeated colon");
-      if (_location === LocationState.ELEMENT_END) _throwUnexpected("colon", "array");
-      _throwUnexpected("colon");
+      _throw(c, _location === LocationState.VALUE_START ? Err_RepeatedColon : Err_WrongColon);
     }
-    if (_location === LocationState.KEY_END) _throw("missing colon between key and value");
+    if (_location === LocationState.KEY_END) _throw(c, Err_ExpectedColon);
 
     switch (c) {
       case "[": {
@@ -537,7 +552,7 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
         return _handleComma(token);
 
       case "+":
-        if (!acceptPositiveSign) _throwUnexpected("sign '+'");
+        if (!acceptPositiveSign) _throw(c, Err_PositiveSignForbidden);
       // fallthrough
       case "-":
         _state = ValueState.NUMBER;
@@ -568,7 +583,7 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
           token.subtype = "fraction_start";
           return;
         }
-        _throw("unexpected '.' before number");
+        _throw(c, Err_EmptyIntegerPart);
       case "N":
         if (acceptNan) {
           _state = ValueState.NUMBER_NAN;
@@ -616,10 +631,8 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
         token.index = 0;
         token.done = undefined;
         return;
-      case "u":
-        _throw(`"undefined" is not a valid JSON value`);
     }
-    _throwUnexpected(formatChar(c));
+    _throw(c, Err_Unexpected);
   };
   const _step = (token: MergedJsonToken, c: string): void => {
     token.location = LOCATION_TABLE[_location];
@@ -659,8 +672,8 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
           token.subtype = "escape_start";
           return;
         }
-        if (c === EOF) _throwUnexpected("EOF", "string");
-        if (isControl(c)) _throwUnexpected(`control character ${formatChar(c)}`, "string");
+        if (c === EOF) _throw(c, Err_Eof);
+        if (isControl(c)) _throw(c, Err_ControlCharacterForbiddenInString);
         token.subtype = "normal";
         return;
       case ValueState.STRING_ESCAPE:
@@ -699,7 +712,7 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
             return;
           }
         }
-        _throw(`bad escaped character ${formatChar(c)}`);
+        _throw(c, Err_BadEscapeInString);
       case ValueState.STRING_UNICODE:
         if (isHex(c)) {
           _substate += c;
@@ -712,7 +725,7 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
           } else token.escaped_value = undefined;
           return;
         }
-        _throw(`bad Unicode escape character ${formatChar(c)}`);
+        _throw(c, Err_BadUnicodeEscapeInString);
       case ValueState.STRING_ESCAPE_HEX:
         if (isHex(c)) {
           _substate += c;
@@ -725,24 +738,24 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
           } else token.escaped_value = undefined;
           return;
         }
-        _throw(`bad Hex escape character ${formatChar(c)}`);
+        _throw(c, Err_BadHexEscapeInString);
 
       case ValueState.NUMBER:
         token.type = "number";
         if (c === "0") {
-          if (_substate === 0) _throw("leading zero not allowed");
+          if (_substate === 0) _throw(c, Err_LeadingZeroForbidden);
           if (_substate === -1) _substate = 0;
           token.subtype = "integer_digit";
           return;
         }
         if (c >= "1" && c <= "9") {
-          if (_substate === 0) _throw("leading zero not allowed");
+          if (_substate === 0) _throw(c, Err_LeadingZeroForbidden);
           if (_substate === -1) _substate = 1;
           token.subtype = "integer_digit";
           return;
         }
         if (c === ".") {
-          if (_substate === -1 && !acceptEmptyInteger) _throw("unexpected '.' before number");
+          if (_substate === -1 && !acceptEmptyInteger) _throw(c, Err_EmptyIntegerPart);
           _state = ValueState.NUMBER_FRACTION;
           _substate = false;
           token.subtype = "fraction_start";
@@ -765,7 +778,7 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
             token.index = 0;
             return;
           }
-          _throw("the integer part cannnot be empty");
+          _throw(c, Err_EmptyIntegerPart);
         }
 
         if (_substate === 0) {
@@ -796,7 +809,7 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
           return;
         }
         if (isNumberSeparator(c, acceptJson5Whitespace)) return _handleNumberSeparator(token, c);
-        _throwUnexpected(formatChar(c), "the integer part of the number");
+        _throw(c, Err_UnexpectedInNumber);
       case ValueState.NUMBER_FRACTION:
         token.type = "number";
         if (c >= "0" && c <= "9") {
@@ -804,7 +817,7 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
           token.subtype = "fraction_digit";
           return;
         }
-        if (!_substate && !acceptEmptyFraction) _throw("the fraction part cannot be empty");
+        if (!_substate && !acceptEmptyFraction) _throw(c, Err_EmptyFractionPart);
 
         if (c === "e" || c === "E") {
           _state = ValueState.NUMBER_EXPONENT;
@@ -813,7 +826,7 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
           return;
         }
         if (isNumberSeparator(c, acceptJson5Whitespace)) return _handleNumberSeparator(token, c);
-        _throwUnexpected(formatChar(c), "the fraction part of the number");
+        _throw(c, Err_UnexpectedInNumber);
       case ValueState.NUMBER_EXPONENT:
         token.type = "number";
         if (c === "+" || c === "-") {
@@ -821,18 +834,18 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
             _substate = 1;
             token.subtype = "exponent_sign";
             return;
-          } else if (_substate === 1) _throwUnexpected(`repeated sign ${c}`, "exponent part");
-          else if (_substate === 2) _throwUnexpected(`sign ${c}`, "exponent part");
+          }
+          _throw(c, Err_UnexpectedInNumber);
         }
         if (c >= "0" && c <= "9") {
           _substate = 2;
           token.subtype = "exponent_digit";
           return;
         }
-        if (_substate === 0 || _substate === 1) _throw("the exponent part cannot be empty");
+        if (_substate === 0 || _substate === 1) _throw(c, Err_EmptyExponentPart);
 
         if (isNumberSeparator(c, acceptJson5Whitespace)) return _handleNumberSeparator(token, c);
-        _throwUnexpected(formatChar(c), "the exponent part of the number");
+        _throw(c, Err_UnexpectedInNumber);
 
       case ValueState.NUMBER_HEX:
         if (isHex(c)) {
@@ -841,10 +854,10 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
           token.subtype = "hex";
           return;
         }
-        if (c === ".") _throw("fraction not allowed in hexadecimal number");
-        if (!_substate) _throw("the hexadecimal integer part cannot be empty");
+        if (c === ".") _throw(c, Err_FractionNotAllowed);
+        if (!_substate) _throw(c, Err_EmptyIntegerPart);
         if (isNumberSeparator(c, acceptJson5Whitespace)) return _handleNumberSeparator(token, c);
-        _throwUnexpected(formatChar(c), "hexadecimal number");
+        _throw(c, Err_UnexpectedInNumber);
       case ValueState.NUMBER_OCT:
         if (c >= "0" && c <= "7") {
           _substate = true;
@@ -852,11 +865,11 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
           token.subtype = "oct";
           return;
         }
-        if (c === "e" || c === "E") _throw("exponent not allowed in octal number");
-        if (c === ".") _throw("fraction not allowed in octal number");
-        if (!_substate) _throw("the octal integer part cannot be empty");
+        if (c === "e" || c === "E") _throw(c, Err_ExponentNotAllowed);
+        if (c === ".") _throw(c, Err_FractionNotAllowed);
+        if (!_substate) _throw(c, Err_EmptyIntegerPart);
         if (isNumberSeparator(c, acceptJson5Whitespace)) return _handleNumberSeparator(token, c);
-        _throwUnexpected(formatChar(c), "octal number");
+        _throw(c, Err_UnexpectedInNumber);
       case ValueState.NUMBER_BIN:
         if (c === "0" || c === "1") {
           _substate = true;
@@ -864,11 +877,11 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
           token.subtype = "bin";
           return;
         }
-        if (c === "e" || c === "E") _throw("exponent not allowed in binary number");
-        if (c === ".") _throw("fraction not allowed in binary number");
-        if (!_substate) _throw("the binary integer part cannot be empty");
+        if (c === "e" || c === "E") _throw(c, Err_ExponentNotAllowed);
+        if (c === ".") _throw(c, Err_FractionNotAllowed);
+        if (!_substate) _throw(c, Err_EmptyIntegerPart);
         if (isNumberSeparator(c, acceptJson5Whitespace)) return _handleNumberSeparator(token, c);
-        _throwUnexpected(formatChar(c), "binary number");
+        _throw(c, Err_UnexpectedInNumber);
 
       case ValueState.COMMENT_MAY_START:
         token.type = "comment";
@@ -882,7 +895,7 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
           token.subtype = "multi_line";
           return;
         }
-        _throw("slash is not used for comment");
+        _throw(c, Err_CommentForbidden);
       case ValueState.SINGLE_LINE_COMMENT:
         if (isNextLine(c)) _state = ValueState.EMPTY;
         token.type = "comment";
@@ -927,7 +940,7 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
           token.subtype = "normal";
           return;
         }
-        _throwUnexpected(formatChar(c), "identifier");
+        _throw(c, Err_InvalidIdentifier);
       case ValueState.IDENTIFIER_ESCAPE:
         token.type = "identifier";
         if ((_substate as string).length === 0) {
@@ -940,7 +953,7 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
             token.done = true;
             return;
           }
-          _throw(`expected 'u' after '\\' in identifier, but got ${formatChar(c)}`);
+          _throw(c, Err_BadIdentifierEscape);
         }
         if (isHex(c)) {
           _substate += c;
@@ -954,14 +967,14 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
           } else token.escaped_value = undefined;
           return;
         }
-        _throw(`expected hexadecimal number after '\\u' in identifier, but got ${formatChar(c)}`);
+        _throw(c, Err_InvalidIdentifierEscape);
     }
   };
   const _feed = (token: AllJsonToken, c: string) => {
     if (_meetCr) {
       if (c !== "\n") {
         ++_line;
-        _column = 1;
+        _column = 0;
       }
       _meetCr = false;
     }
@@ -973,9 +986,12 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
         _meetCr = true;
       } else {
         ++_line;
-        _column = 1;
+        _column = 0;
       }
-    } else if (c !== EOF) ++_column;
+    } else {
+      if (c !== EOF) ++_column;
+      else --_position;
+    }
     return token;
   };
 
@@ -1001,6 +1017,13 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
       return _column;
     },
 
+    getStage(): JsonStreamParserStage {
+      if (_state !== ValueState.EMPTY) return JsonStreamParserStage.PARSING;
+      if (_location === LocationState.ROOT_START) return JsonStreamParserStage.NOT_STARTED;
+      if (_location === LocationState.ROOT_END || _location === LocationState.EOF) return JsonStreamParserStage.ENDED;
+      return JsonStreamParserStage.PARSING;
+    },
+
     copy() {
       return createJsonStreamParserInternal(option, [
         _position,
@@ -1017,20 +1040,44 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
   };
 };
 
-export interface JsonStreamParser<Opt extends JsonOption = JsonOption> {
-  feedOneTo: (destToken: object, c: string) => JsonToken<Opt>;
+export interface JsonStreamParserBase {
+  get position(): number;
+  /** Line number (starting from 0) */
+  get line(): number;
+  /** Column number (starting from 0) */
+  get column(): number;
 
+  getStage(): JsonStreamParserStage;
+}
+export const enum JsonStreamParserStage {
+  NOT_STARTED = -1,
+  PARSING = 0,
+  ENDED = 1,
+}
+export interface JsonStreamParser<Opt extends JsonOption = JsonOption> extends JsonStreamParserBase {
+  feedOneTo: (destToken: object, c: string) => JsonToken<Opt>;
   feed(s: string): JsonToken<Opt>[];
   end(): JsonToken<Opt>;
-
-  get position(): number;
-  get line(): number;
-  get column(): number;
 
   copy(): JsonStreamParser<Opt>;
 }
 export const createJsonStreamParser = <Opt extends JsonOption = {}>(option?: Opt) => {
   return createJsonStreamParserInternal(option) as JsonStreamParser<Opt>;
+};
+
+const patchObject = <Dest extends object, Src extends object, Keys extends KeyT[], KeyT extends keyof Src>(
+  dest: Dest,
+  src: Src,
+  keys: Keys,
+): Dest & { [K in KeyT]: Src[K] } => {
+  for (const key of keys) Object.defineProperty(dest, key, Object.getOwnPropertyDescriptor(src, key)!);
+  return dest as any;
+};
+export const patchJsonStreamParserBase = <T extends object, Opt extends JsonOption = JsonOption>(
+  target: T,
+  parser: JsonStreamParser<Opt>,
+): JsonStreamParserBase & Omit<T, "line"> => {
+  return patchObject(target, parser, ["getStage", "position", "line", "column"]);
 };
 
 export const jsonStreamParse = <Opt extends JsonOption = {}>(s: string, option?: Opt): JsonToken<Opt>[] => {

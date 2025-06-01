@@ -1,6 +1,8 @@
 export class JsonParserError extends Error {
-  constructor(msg: string) {
-    super(msg);
+  reason: string;
+  constructor(message: string, reason: string = message) {
+    super(message);
+    this.reason = reason;
     this.name = "JsonParserError";
   }
 }

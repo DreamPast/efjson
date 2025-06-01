@@ -204,6 +204,7 @@ No \\\\n's! \\x40",
     const getPosInfo = (s: string) => {
       const parser = createJsonEventParser({ number: {} });
       parser.feed(s);
+      parser.end();
       return {
         line: parser.line,
         column: parser.column,
@@ -211,10 +212,11 @@ No \\\\n's! \\x40",
       };
     };
 
-    assertEq(getPosInfo("\r\n1"), { line: 2, column: 2, position: 3 });
-    assertEq(getPosInfo("\r\r1"), { line: 3, column: 2, position: 3 });
-    assertEq(getPosInfo("\r1"), { line: 2, column: 2, position: 2 });
-    assertEq(getPosInfo("\n1"), { line: 2, column: 2, position: 2 });
+    assertEq(getPosInfo("\r\n1"), { line: 1, column: 1, position: 3 });
+    assertEq(getPosInfo("\r\r1"), { line: 2, column: 1, position: 3 });
+    assertEq(getPosInfo("\n\n1"), { line: 2, column: 1, position: 3 });
+    assertEq(getPosInfo("\r1"), { line: 1, column: 1, position: 2 });
+    assertEq(getPosInfo("\n1"), { line: 1, column: 1, position: 2 });
   });
 
   test("number", () => {

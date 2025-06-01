@@ -1,6 +1,6 @@
 import { JsonArray, JsonObject, JsonValue } from "../base";
 import { JsonOption, parseJsonNumber } from "./base";
-import { createJsonStreamParser, JsonToken } from "./stream";
+import { createJsonStreamParser, JsonStreamParserBase, JsonToken, patchJsonStreamParserBase } from "./stream";
 
 namespace NormalState {
   export type _StateLess = { _start: boolean };
@@ -165,44 +165,36 @@ export const jsonNormalEmit = <Opt extends JsonOption = JsonOption>(tokens: Iter
   return emitter.get() as JsonValue;
 };
 
-export interface JsonNormalParser {
+export interface JsonNormalParser extends JsonStreamParserBase {
   feed: (s: string) => void;
   end: () => void;
   get: () => JsonValue | undefined;
-
-  get position(): number;
-  get line(): number;
-  get column(): number;
 }
 export const createJsonNormalParser = <Opt extends JsonOption = JsonOption>(option?: Opt): JsonNormalParser => {
   const _parser = createJsonStreamParser(option);
   const _emitter = createJsonNormalEmitter<Opt>();
   const _token = {};
-  return {
-    feed(s: string) {
-      for (const c of s) _emitter.feed(_parser.feedOneTo(_token, c));
+  return patchJsonStreamParserBase(
+    {
+      feed(s: string) {
+        for (const c of s) _emitter.feed(_parser.feedOneTo(_token, c));
+      },
+      end() {
+        _emitter.feed(_parser.end());
+      },
+      get() {
+        return _emitter.get();
+      },
     },
-    end() {
-      _emitter.feed(_parser.end());
-    },
-    get() {
-      return _emitter.get();
-    },
-    get position() {
-      return _parser.position;
-    },
-    get line() {
-      return _parser.line;
-    },
-    get column() {
-      return _parser.column;
-    },
-  };
+    _parser,
+  );
 };
 
 export const jsonNormalParse = <Opt extends JsonOption = JsonOption>(str: string, option?: Opt) => {
-  const parser = createJsonNormalParser(option);
-  parser.feed(str);
-  parser.end();
-  return parser.get() as JsonValue;
+  const emitter = createJsonNormalEmitter<Opt>();
+  const baseParser = createJsonStreamParser(option);
+  const token = {};
+  for (const c of str) emitter.feed(baseParser.feedOneTo(token, c));
+  emitter.feed(baseParser.end());
+  return emitter.get();
 };
