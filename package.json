@@ -1,6 +1,6 @@
 {
   "name": "efjson",
-  "version": "0.13.1",
+  "version": "0.14.0",
   "description": "a streaming and event-driven JSON parser (with support for JSON5 and JSONC)",
   "main": "lib/efjson.mjs",
   "types": "lib/efjson.d.ts",
@@ -16,13 +16,13 @@
   "license": "MIT",
   "scripts": {
     "build": "tsc && rollup -c rollup.config.js",
-    "gen_mjs": "uglifyjs lib/efjson.mjs --config-file uglifyjs.json --output lib/efjson.min.mjs --module",
-    "build_mjs": "npm run build && npm run gen_mjs",
+    "gen_min": "uglifyjs lib/efjson.mjs --config-file uglifyjs.json --output lib/efjson.min.mjs --module",
+    "build_min": "npm run build && npm run gen_min",
     "format_lib": "prettier --ignore-path --write lib/efjson.mjs \"lib/**/*.d.ts\"",
     "format": "prettier --write src/ test/ perf/ example/",
     "test": "jest",
     "perf": "tsx ./perf/index.ts",
-    "prepack": "npm run build && npm run format_lib",
+    "prepack": "rimraf lib/ && npm run build && npm run format_lib",
     "postpack": "rimraf lib/ tmp/"
   },
   "devDependencies": {
