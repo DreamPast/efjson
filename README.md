@@ -8,8 +8,6 @@
 - supports JSON5 and JSONC
 - stream parser requires minimal memory when no events are triggered
 
-The state diagram for stream parsing JSON can be found in [The Diagram of JSON Token State Transition](./doc/stream_token/README.md).
-
 ## Installation
 
 ### Installation via [npm](https://npmjs.org/)

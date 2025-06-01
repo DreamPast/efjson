@@ -8,8 +8,6 @@
 - 支持 JSON5 和 JSONC
 - 在无事件的情况下，流解析器只需要极少的内存
 
-流式解析 JSON 的状态图可以参考[JSON Token 状态转移图](./doc/stream_token/README.md)
-
 ## 安装
 
 ### 通过[npm](https://npmjs.org/)安装
