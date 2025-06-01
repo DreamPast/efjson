@@ -21,40 +21,16 @@ npm install efjson
 ### 流式解析
 
 ```ts
-import { createJsonStreamParser } from "efjson";
+import { jsonStreamParse } from "efjson";
 
-const json = `
-{
-  "null": null,
-  "true": true,
-  "false": false,
-
-  "string": "string",
-  "string_with_escape": "string with \\"escape\\"",
-  "string_with_unicode_escape": "string with \\uD83D\\uDE00",
-  "string_with_unicode": "string with 😊",
-
-  "integer": 1234,
-  "negative": -1234,
-  "number": 1234.5678,
-  "number_with_exponent": 1.234e2,
-
-  "array": [
-    "this is the first element",
-    {
-      "object": "a nesting object"
-    }
-  ],
-  "object": {
-    "1st": [],
-    "2st": {}
-  }
-}
-`;
-const parser = createJsonStreamParser();
-// 你可以传递任何长度的字符串到parser
-for (const c of json) console.log(parser.feed(c));
-console.log(parser.end());
+const json = `{
+"null":null,"true":true,"false":false,
+"string":"string,\\"escape\\",\\uD83D\\uDE00,😊",
+"integer":12,"negative":-12,"fraction":12.34,"exponent":1.234e2,
+"array":["1st element",{"object":"nesting"}],
+"object":{"1st":[],"2st":{}}
+}`;
+for (const token of jsonStreamParse(json)) console.log(token);
 ```
 
 ### 事件响应
