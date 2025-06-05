@@ -248,6 +248,7 @@ export class JsonStreamParserError extends JsonParserError {
 const Err_CommentForbidden = "comment not allowed";
 const Err_Eof = "structure broken because of EOF";
 const Err_NonwhitespaceAfterEnd = "unexpected non-whitespace character after end of JSON";
+const Err_ContentAfterEOF = "content after EOF";
 const Err_TrailingCommaForbidden = "trailing comma not allowed";
 const Err_Unexpected = "unexpected character";
 const Err_WrongBracket = "wrong bracket";
@@ -381,7 +382,8 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
       token.subtype = "next";
       return;
     }
-    if (_location === LocationState.ELEMENT_FIRST_START) _throw(",", Err_TrailingCommaForbidden);
+    if (_location === LocationState.ELEMENT_FIRST_START) _throw(",", Err_CommaInEmptyArray);
+    if (_location === LocationState.ELEMENT_START) _throw(",", Err_TrailingCommaForbidden);
     if (_location === LocationState.VALUE_START) _throw(",", Err_EmptyValueInObject);
     _throw(",", Err_Unexpected);
   };
@@ -431,7 +433,6 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
   const _handleSlash = (token: MergedJsonToken) => {
     if (acceptSingleLineComment || acceptMultiLineComment) {
       _state = ValueState.COMMENT_MAY_START;
-      token.location = LOCATION_TABLE[_location];
       token.type = "comment";
       token.subtype = "may_start";
       return;
@@ -451,16 +452,30 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
     token.subtype = undefined;
     return;
   };
-  const _handleLiteral = (
+  const _handleLiteral = (token: MergedJsonToken, c: string, type: "null" | "true" | "false") => {
+    const dc = type[_substate as number];
+    if (c === dc) {
+      token.type = type;
+      token.subtype = undefined;
+      token.index = _substate as number;
+      if (++(_substate as number) === type.length) {
+        _state = ValueState.EMPTY;
+        _location = NEXT_STATE_TABLE[_location];
+        token.done = true;
+      } else token.done = undefined;
+      return;
+    }
+    _throw(c, Err_Unexpected);
+  };
+  const _handleNumberLiteral = (
     token: MergedJsonToken,
     c: string,
-    literal: string,
-    subtype: "infinity" | "nan" | undefined = undefined,
-    type = literal as "number" | "true" | "false" | "null",
+    literal: "Infinity" | "NaN",
+    subtype: "infinity" | "nan",
   ) => {
     const dc = literal[_substate as number];
     if (c === dc) {
-      token.type = type;
+      token.type = "number";
       token.subtype = subtype;
       token.index = _substate as number;
       if (++(_substate as number) === literal.length) {
@@ -470,10 +485,12 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
       } else token.done = undefined;
       return;
     }
-    _throw(c, Err_Unexpected);
+    _throw(c, Err_UnexpectedInNumber);
   };
 
   const _stepEmpty = (token: MergedJsonToken, c: string): void => {
+    if (_location == LocationState.EOF) _throw(c, Err_ContentAfterEOF);
+
     if (isWhitespace(c, acceptJson5Whitespace)) {
       token.type = "whitespace";
       token.subtype = undefined;
@@ -495,14 +512,12 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
       if (acceptIdentifierKey)
         if (isIdentifierStart(c)) {
           _state = ValueState.IDENTIFIER;
-          token.location = "key";
           token.type = "identifier";
           token.subtype = "normal";
           return;
         } else if (c === "\\") {
           _state = ValueState.IDENTIFIER_ESCAPE;
           _substate = "";
-          token.location = "key";
           token.type = "identifier";
           token.subtype = "escape_start";
           token.index = 0;
@@ -515,7 +530,6 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
     if (c === ":") {
       if (_location === LocationState.KEY_END) {
         _location = LocationState.VALUE_START;
-        _state = ValueState.EMPTY;
         token.location = "object";
         token.type = "object";
         token.subtype = "value_start";
@@ -525,31 +539,26 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
     }
     if (_location === LocationState.KEY_END) _throw(c, Err_ExpectedColon);
 
+    if (c === "]") return _handleArrayEnd(token);
+    if (c === "}") return _handleObjectEnd(token);
+    if (c === ",") return _handleComma(token);
+    if (_location === LocationState.ELEMENT_END || _location === LocationState.VALUE_END) _throw(c, Err_Unexpected);
+
     switch (c) {
       case "[": {
         _stack.push(_location);
         _location = LocationState.ELEMENT_FIRST_START;
-        _state = ValueState.EMPTY;
         token.type = "array";
         token.subtype = "start";
         return;
       }
-      case "]":
-        return _handleArrayEnd(token);
-
       case "{": {
         _stack.push(_location);
         _location = LocationState.KEY_FIRST_START;
-        _state = ValueState.EMPTY;
         token.type = "object";
         token.subtype = "start";
         return;
       }
-      case "}":
-        return _handleObjectEnd(token);
-
-      case ",":
-        return _handleComma(token);
 
       case "+":
         if (!acceptPositiveSign) _throw(c, Err_PositiveSignForbidden);
@@ -594,7 +603,7 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
           token.done = undefined;
           return;
         }
-        break;
+        _throw(c, Err_UnexpectedInNumber);
       case "I":
         if (acceptInfinity) {
           _state = ValueState.NUMBER_INFINITY;
@@ -605,7 +614,7 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
           token.done = undefined;
           return;
         }
-        break;
+        _throw(c, Err_UnexpectedInNumber);
 
       case "n":
         _state = ValueState.NULL;
@@ -647,9 +656,9 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
       case ValueState.FALSE:
         return _handleLiteral(token, c, "false");
       case ValueState.NUMBER_INFINITY:
-        return _handleLiteral(token, c, "Infinity", "infinity", "number");
+        return _handleNumberLiteral(token, c, "Infinity", "infinity");
       case ValueState.NUMBER_NAN:
-        return _handleLiteral(token, c, "NaN", "nan", "number");
+        return _handleNumberLiteral(token, c, "NaN", "nan");
 
       case ValueState.STRING_MULTILINE_CR:
         if (c === "\n") {
@@ -929,13 +938,11 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
         if (isWhitespace(c, acceptJson5Whitespace)) {
           _location = LocationState.KEY_END;
           _state = ValueState.EMPTY;
-          token.location = "key";
           token.type = "whitespace";
           token.subtype = undefined;
           return;
         }
         if (isIdentifierNext(c)) {
-          token.location = "key";
           token.type = "identifier";
           token.subtype = "normal";
           return;
@@ -947,7 +954,6 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
           if (c === "u") {
             _state = ValueState.IDENTIFIER_ESCAPE;
             _substate = "u";
-            token.location = "key";
             token.subtype = "escape_start";
             token.index = 1;
             token.done = true;
@@ -957,7 +963,6 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
         }
         if (isHex(c)) {
           _substate += c;
-          token.location = "key";
           token.subtype = "escape";
           token.index = (_substate as string).length - 2;
           if ((_substate as string).length === 5) {
@@ -971,6 +976,7 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
     }
   };
   const _feed = (token: AllJsonToken, c: string) => {
+    _step(token as MergedJsonToken, c);
     if (_meetCr) {
       if (c !== "\n") {
         ++_line;
@@ -978,7 +984,6 @@ const createJsonStreamParserInternal = (option?: JsonOption, init?: any[]) => {
       }
       _meetCr = false;
     }
-    _step(token as MergedJsonToken, c);
     ++_position;
     if (isNextLine(c)) {
       if (c === "\r") {

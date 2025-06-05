@@ -64,6 +64,7 @@ describe("other", () => {
 
   test("special", () => {
     checkNormal("\0", undefined);
+    checkNormal(",", undefined);
   });
 
   test("emit", () => {

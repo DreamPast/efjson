@@ -9,6 +9,10 @@ test("normal[literal]", () => {
   checkNormal("True", undefined);
   checkNormal("False", undefined);
 
+  checkNormal("nUll", undefined);
+  checkNormal("tRue", undefined);
+  checkNormal("fAlse", undefined);
+
   checkNormal("undefined", undefined);
   checkNormal("Iull", undefined, { acceptNan: true });
   checkNormal("Nnfinity", undefined, { acceptInfinity: true });

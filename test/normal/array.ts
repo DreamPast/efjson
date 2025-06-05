@@ -18,4 +18,6 @@ test("normal[array]", () => {
   checkNormal("[1:", undefined);
   checkNormal("[null:", undefined);
   checkNormal("[1,", undefined);
+
+  checkNormal("[1 []]", undefined);
 });

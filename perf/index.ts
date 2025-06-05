@@ -40,17 +40,10 @@ const perfObject = () => {
   const TABLE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   console.log("======Object");
 
-  const gen = (val: number) => {
-    const list: string[] = [];
-    while (val) {
-      list.push(TABLE[val % TABLE.length]);
-      val = Math.floor(val / TABLE.length);
-    }
-    return list.join("");
-  };
+  const gen = () => TABLE[(Math.random() * TABLE.length) | 0];
   const genList = (len: number) => {
     const ret: string[] = [];
-    for (let i = 0; i < len; ++i) ret.push(gen(i));
+    for (let i = 0; i < len; ++i) ret.push(gen());
     return ret;
   };
 
