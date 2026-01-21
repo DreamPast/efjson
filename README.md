@@ -2,6 +2,8 @@
 
 [English](./README.md) [简体中文](./README.zh.md)
 
+This library is currently in Alpha version, and there may be many API changes.
+
 ## Features
 
 - no runtime dependencies
@@ -26,7 +28,7 @@ import { jsonStreamParse } from "efjson";
 const json = `{
 "null":null,"true":true,"false":false,
 "string":"string,\\"escape\\",\\uD83D\\uDE00,😊",
-"integer":12,"negative":-12,"fraction":12.34,"exponent":1.234e2,
+"integer":12,"negative":-12,"fraction":12.34,"exponent":1.234e+2,
 "array":["1st element",{"object":"nesting"}],
 "object":{"1st":[],"2st":{}}
 }`;

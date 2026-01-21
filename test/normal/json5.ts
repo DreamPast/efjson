@@ -41,7 +41,7 @@ No \\\\n's! \\x40",
       nan: NaN,
       infinity: [Infinity, -Infinity],
     },
-    JSON5_OPTION,
+    JSON5_OPTION
   );
 
   const option: JsonOption = Object.assign({}, JSON5_OPTION);

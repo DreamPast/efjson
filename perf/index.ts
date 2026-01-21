@@ -5,40 +5,111 @@ const measure = (fn: () => unknown) => {
   fn();
   return performance.now() - start;
 };
-const measurePrint = (fn: () => void, label: string = "") => console.log(label, measure(fn));
+
+const HEADER = [
+  " ".repeat(17),
+  "JSON.parse",
+  "stream (not save)",
+  "steam (save)",
+  "event (not save)",
+  "event (save)",
+  "   normal",
+];
+
+const createPrintList = () => {
+  const format = (idx: number, item: string | number) => {
+    const nitem = typeof item === "string" ? item : item.toFixed(2);
+    return nitem.padStart(HEADER[idx].length, " ");
+  };
+
+  // @ts-ignore
+  if (typeof process === "object") {
+    // @ts-ignore
+    const write = (str: string): void => void process.stdout.write(str);
+    write("|");
+    let idx = 0;
+    return {
+      add: (item: string | number) => write(` ${format(idx++, item)} |`),
+      end: () => write("\n"),
+    };
+  } else {
+    const list: string[] = [];
+    return {
+      add(item: string | number) {
+        list.push(format(list.length, item));
+      },
+      end() {
+        console.log(`| ${list.join(" | ")} |`);
+        list.length = 0;
+      },
+    };
+  }
+};
+
+const printSeparate = () => {
+  const list = [""];
+  for (const header of HEADER) list.push("-".repeat(header.length + 2));
+  list.push("");
+  console.log(list.join("+"));
+};
+
+printSeparate();
+{
+  const list = [""];
+  for (const header of HEADER) list.push(` ${header} `);
+  list.push("");
+  console.log(list.join("|"));
+}
+printSeparate();
 
 const perfArray = () => {
   const s1 = `[${"100,".repeat(1000).slice(0, -1)}],`;
-  const s = `[${s1.repeat(5000).slice(0, -1)}]`;
-  console.log("======Array");
+  const s = `[${s1.repeat(2000).slice(0, -1)}]`;
 
-  measurePrint(() => JSON.parse(s), "JSON.parse");
+  const printList = createPrintList();
+  printList.add("Array");
 
-  measurePrint(() => {
-    const parser = createJsonStreamParser();
-    const token: object = {};
-    for (const c of s) parser.feedOneTo(token, c);
-  }, "stream (not save token)");
+  printList.add(measure(() => JSON.parse(s)));
 
-  measurePrint(() => {
-    jsonStreamParse(s);
-  }, "steam (save token)");
+  printList.add(
+    measure(() => {
+      const parser = createJsonStreamParser();
+      const token: object = {};
+      for (const c of s) parser.feedOneTo(token, c);
+    })
+  );
 
-  measurePrint(() => {
-    jsonEventParse(s, { array: { save() {} } });
-  }, "event (save)");
+  printList.add(
+    measure(() => {
+      jsonStreamParse(s);
+    })
+  );
 
-  measurePrint(() => {
-    jsonEventParse(s, { array: {} });
-  }, "event (not save)");
+  printList.add(
+    measure(() => {
+      jsonEventParse(s, { array: { save() {} } });
+    })
+  );
 
-  measurePrint(() => {
-    jsonNormalParse(s);
-  }, "normal");
+  printList.add(
+    measure(() => {
+      jsonEventParse(s, { array: {} });
+    })
+  );
+
+  printList.add(
+    measure(() => {
+      jsonNormalParse(s);
+    })
+  );
+
+  printList.end();
 };
 const perfObject = () => {
   const TABLE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  console.log("======Object");
+
+  const printList = createPrintList();
+  printList.add("Object");
 
   const gen = () => TABLE[(Math.random() * TABLE.length) | 0];
   const genList = (len: number) => {
@@ -50,95 +121,137 @@ const perfObject = () => {
   const s1 = `{${genList(500)
     .map((item) => `"${item}":"${item}"`)
     .join(",")}}`;
-  const s = `{${genList(2000)
+  const s = `{${genList(1000)
     .map((item) => `"${item}":${s1}`)
     .join(",")}}`;
 
-  measurePrint(() => JSON.parse(s), "JSON.parse");
+  printList.add(measure(() => JSON.parse(s)));
 
-  measurePrint(() => {
-    const parser = createJsonStreamParser();
-    const token: object = {};
-    for (const c of s) parser.feedOneTo(token, c);
-  }, "stream (not save token)");
+  printList.add(
+    measure(() => {
+      const parser = createJsonStreamParser();
+      const token: object = {};
+      for (const c of s) parser.feedOneTo(token, c);
+    })
+  );
 
-  measurePrint(() => {
-    jsonStreamParse(s);
-  }, "steam (save token)");
+  printList.add(
+    measure(() => {
+      jsonStreamParse(s);
+    })
+  );
 
-  measurePrint(() => {
-    jsonEventParse(s, { object: { save() {} } });
-  }, "event (save)");
+  printList.add(
+    measure(() => {
+      jsonEventParse(s, { object: { save() {} } });
+    })
+  );
 
-  measurePrint(() => {
-    jsonEventParse(s, { object: {} });
-  }, "event (not save)");
+  printList.add(
+    measure(() => {
+      jsonEventParse(s, { object: {} });
+    })
+  );
 
-  measurePrint(() => {
-    jsonNormalParse(s);
-  }, "normal");
+  printList.add(
+    measure(() => {
+      jsonNormalParse(s);
+    })
+  );
+
+  printList.end();
 };
 const perfString = () => {
   const list = ['"'];
-  for (let i = 0; i < 10000000; ++i) list.push(String.fromCodePoint((Math.random() * (0x10ffff - 0xff) + 0xff) | 0));
+  for (let i = 0; i < 5000000; ++i) list.push(String.fromCodePoint((Math.random() * (0x10ffff - 0xff) + 0xff) | 0));
   list.push('"');
   const s = list.join("");
-  console.log("======String");
 
-  measurePrint(() => JSON.parse(s), "JSON.parse");
+  const printList = createPrintList();
+  printList.add("String");
 
-  measurePrint(() => {
-    const parser = createJsonStreamParser();
-    const token: object = {};
-    for (const c of s) parser.feedOneTo(token, c);
-  }, "stream (not save token)");
+  printList.add(measure(() => JSON.parse(s)));
 
-  measurePrint(() => {
-    jsonStreamParse(s);
-  }, "steam (save token)");
+  printList.add(
+    measure(() => {
+      const parser = createJsonStreamParser();
+      const token: object = {};
+      for (const c of s) parser.feedOneTo(token, c);
+    })
+  );
 
-  measurePrint(() => {
-    jsonEventParse(s, { string: { save() {} } });
-  }, "event (save)");
+  printList.add(
+    measure(() => {
+      jsonStreamParse(s);
+    })
+  );
 
-  measurePrint(() => {
-    jsonEventParse(s, { string: {} });
-  }, "event (not save)");
+  printList.add(
+    measure(() => {
+      jsonEventParse(s, { string: { save() {} } });
+    })
+  );
 
-  measurePrint(() => {
-    jsonNormalParse(s);
-  }, "normal");
+  printList.add(
+    measure(() => {
+      jsonEventParse(s, { string: {} });
+    })
+  );
+
+  printList.add(
+    measure(() => {
+      jsonNormalParse(s);
+    })
+  );
+
+  printList.end();
 };
 const perfRecursiveArray = () => {
   const s = ["[".repeat(2000000), "1", "]".repeat(2000000)].join("");
-  console.log("======Recursive Array");
 
-  measurePrint(() => JSON.parse(s), "JSON.parse");
+  const printList = createPrintList();
+  printList.add("Recursive Array");
 
-  measurePrint(() => {
-    const parser = createJsonStreamParser();
-    const token: object = {};
-    for (const c of s) parser.feedOneTo(token, c);
-  }, "stream (not save token)");
+  printList.add(measure(() => JSON.parse(s)));
 
-  measurePrint(() => {
-    jsonStreamParse(s);
-  }, "steam (save token)");
+  printList.add(
+    measure(() => {
+      const parser = createJsonStreamParser();
+      const token: object = {};
+      for (const c of s) parser.feedOneTo(token, c);
+    })
+  );
 
-  measurePrint(() => {
-    jsonEventParse(s, { array: { save() {} } });
-  }, "event (save)");
+  printList.add(
+    measure(() => {
+      jsonStreamParse(s);
+    })
+  );
 
-  measurePrint(() => {
-    jsonEventParse(s, { array: {} });
-  }, "event (not save)");
+  printList.add(
+    measure(() => {
+      jsonEventParse(s, { array: { save() {} } });
+    })
+  );
 
-  measurePrint(() => {
-    jsonNormalParse(s);
-  }, "normal");
+  printList.add(
+    measure(() => {
+      jsonEventParse(s, { array: {} });
+    })
+  );
+
+  printList.add(
+    measure(() => {
+      jsonNormalParse(s);
+    })
+  );
+
+  printList.end();
 };
 
 perfArray();
 perfObject();
 perfString();
 perfRecursiveArray();
+
+printSeparate();

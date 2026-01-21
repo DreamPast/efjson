@@ -2,6 +2,8 @@
 
 [English](./README.md) [简体中文](./README.zh.md)
 
+当前此库仍在Alpha版本，可能存在大量API更改。
+
 ## 特色
 
 - 无运行时依赖
@@ -26,7 +28,7 @@ import { jsonStreamParse } from "efjson";
 const json = `{
 "null":null,"true":true,"false":false,
 "string":"string,\\"escape\\",\\uD83D\\uDE00,😊",
-"integer":12,"negative":-12,"fraction":12.34,"exponent":1.234e2,
+"integer":12,"negative":-12,"fraction":12.34,"exponent":1.234e+2,
 "array":["1st element",{"object":"nesting"}],
 "object":{"1st":[],"2st":{}}
 }`;

@@ -16,8 +16,8 @@ export class JsonParserError extends Error {
  *   - JSON5
  *     @see https://spec.json5.org/
  */
-export type JsonOption = {
-  // << white space >>
+export interface JsonOption {
+  // << whitespace >>
   /**
    * whether to accept whitespace in JSON5
    */
@@ -109,7 +109,13 @@ export type JsonOption = {
    * whether to accept multi-line comment
    */
   acceptMultiLineComment?: boolean;
-};
+
+  // << other >>
+  /**
+   * whether to allow empty json value
+   */
+  acceptEmptyValue?: boolean;
+}
 export const JSONC_OPTION = Object.freeze({
   // << comment >>
   acceptSingleLineComment: true,
@@ -118,7 +124,7 @@ export const JSONC_OPTION = Object.freeze({
 export const JSON5_OPTION = Object.freeze({
   ...JSONC_OPTION,
 
-  // << white space >>
+  // << whitespace >>
   acceptJson5Whitespace: true,
 
   // << array >>
@@ -146,6 +152,7 @@ export const JSON_FULL_OPTION = Object.freeze({
   // << number >>
   acceptOctalInteger: true,
   acceptBinaryInteger: true,
+  acceptEmptyValue: true,
 });
 
 export const parseJsonNumber = (str: string): number => {

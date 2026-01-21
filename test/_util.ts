@@ -15,6 +15,7 @@ const compareJson = (lhs: any, rhs: any, prefix: string) => {
     }
     return;
   }
+  if (lhs === null || rhs === null) throw new Error(`${prefix}value mismatch, ${lhs} != ${rhs}`);
   if (typeof lhs === "object") {
     for (const key in lhs) {
       if (!(key in rhs)) throw new Error(`${prefix}object key mismatch, ${key} not in rhs`);
@@ -49,7 +50,7 @@ export const assertSubset = (got: Record<string, any>, expect: Record<string, an
 export const assertElementSubset = (got: object[], expect: object[]) => {
   if (got.length !== expect.length) throw new Error(`expected ${expect.length} elements but got ${got.length}`);
   const n = got.length;
-  for (let i = 0; i < n; i++) assertSubset(got[i], expect[i], `[${i}]`);
+  for (let i = 0; i < n; i++) assertSubset(got[i], expect[i], `${i}`);
 };
 
 export const combine = <T>(choices: T[][]) => {
@@ -90,14 +91,10 @@ export const checkNormal = <Opt extends JsonOption = JsonOption>(s: string, expe
     ret = jsonNormalParse(s, option);
   } catch (e) {
     if (expect === undefined) return;
-    console.log(s);
-    console.log(option);
-    throw new Error("expected no error, but got: " + e);
+    throw new Error(`${s}\n${option}\nexpected no error, but got: ${e}`);
   }
   if (expect === undefined) {
-    console.log(s);
-    console.log(option);
-    throw new Error("expected error, but got nothing");
+    throw new Error(`${s}\n${option}\nexpected error, but got nothing`);
   }
   assertEq(ret, expect, s);
 };
@@ -105,19 +102,18 @@ export const checkEvent = <Opt extends JsonOption = JsonOption>(
   s: string,
   receiver: JsonEventReceiver<Opt>,
   expect_error = false,
-  option?: Opt,
+  option?: Opt
 ) => {
   try {
     jsonEventParse(s, receiver, option);
   } catch (e) {
     if (expect_error) return;
-    console.log(s);
-    console.log(option);
+    console.log({ s, option });
+    console.log(e);
     throw new Error("expected no error, but got: " + e);
   }
   if (expect_error) {
-    console.log(s);
-    console.log(option);
+    console.log({ s, option });
     throw new Error("expected error, but got nothing");
   }
 };
@@ -125,7 +121,7 @@ export const checkPointerGet = (
   expect: JsonValue | undefined,
   obj: JsonValue,
   path: string | string[],
-  start?: string | string[],
+  start?: string | string[]
 ) => {
   let ret: any;
   try {
@@ -150,7 +146,7 @@ export const checkPointerSet = (
   obj: JsonValue,
   path: string | string[],
   value: JsonValue,
-  start?: string | string[],
+  start?: string | string[]
 ) => {
   try {
     jsonPointer(obj, path, value, start);

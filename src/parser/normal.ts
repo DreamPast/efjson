@@ -1,6 +1,13 @@
 import { JsonArray, JsonObject, JsonValue } from "../base";
 import { JsonOption, parseJsonNumber } from "./base";
-import { createJsonStreamParser, JsonStreamParserBase, JsonToken, patchJsonStreamParserBase } from "./stream";
+import {
+  Category,
+  createJsonStreamParser,
+  JsonStreamParserBase,
+  JsonToken,
+  patchJsonStreamParserBase,
+  Type,
+} from "./stream";
 
 namespace NormalState {
   export type _StateLess = { _start: boolean };
@@ -29,7 +36,7 @@ export const createJsonNormalEmitter = <Opt extends JsonOption = JsonOption>() =
     else _ret = value;
   };
 
-  const _feedNumber = (token: JsonToken<Opt> & { type: "number" }) => {
+  const _feedNumber = (token: JsonToken<Opt> & { category: Category.NUMBER }) => {
     const state = _stack[_stack.length - 1] as NormalState._Number;
     if (!state._start) {
       state._list = [];
@@ -38,28 +45,32 @@ export const createJsonNormalEmitter = <Opt extends JsonOption = JsonOption>() =
     }
     state._list.push(token.character);
   };
-  const _feedString = (token: JsonToken<Opt> & { type: "string" }) => {
+  const _feedString = (token: JsonToken<Opt> & { category: Category.STRING }) => {
     const state = _stack[_stack.length - 1] as NormalState._String;
     if (!state._start) {
       state._list = [];
       state._start = true;
     }
-    if (token.subtype === "normal") state._list.push(token.character);
-    else if (token.subtype === "escape" || token.subtype === "escape_unicode" || token.subtype === "escape_hex") {
-      if (token.escaped_value !== undefined) state._list.push(token.escaped_value);
-    } else if (token.subtype === "end") _endValue(state._list.join(""));
+    if (token.type === Type.STRING_NORMAL) state._list.push(token.character);
+    else if (
+      token.type === Type.STRING_ESCAPE ||
+      token.type === Type.STRING_ESCAPE_UNICODE ||
+      token.type === Type.STRING_ESCAPE_HEX
+    ) {
+      if (token.escaped !== undefined) state._list.push(token.escaped);
+    } else if (token.type === Type.STRING_END) _endValue(state._list.join(""));
   };
-  const _feedIdentifier = (token: JsonToken<Opt> & { type: "identifier" }) => {
+  const _feedIdentifier = (token: JsonToken<Opt> & { category: Category.IDENTIFIER }) => {
     const state = _stack[_stack.length - 1] as NormalState._String;
     if (!state._start) {
       state._list = [];
       _spec = SpecialParse.Identifier;
       state._start = true;
     }
-    if (token.subtype === "normal") state._list.push(token.character);
-    else if (token.subtype === "escape" && token.escaped_value !== undefined) state._list.push(token.escaped_value);
+    if (token.type === Type.IDENTIFIER_NORMAL) state._list.push(token.character);
+    else if (token.type === Type.IDENTIFIER_ESCAPE && token.escaped !== undefined) state._list.push(token.escaped);
   };
-  const _feedObject = (token: JsonToken<Opt> & { type: "object" }) => {
+  const _feedObject = (token: JsonToken<Opt> & { category: Category.OBJECT }) => {
     const state = _stack[_stack.length - 1] as NormalState._Object;
     if (!state._start) {
       state._object = {};
@@ -67,21 +78,21 @@ export const createJsonNormalEmitter = <Opt extends JsonOption = JsonOption>() =
       _stack.push({ _start: false });
       return;
     }
-    /* if (token.subtype === "start") return; */
-    if (token.subtype === "end") {
+    /* console.assert(token.type !== Type.OBJECT_START); */
+    if (token.type === Type.OBJECT_END) {
       if (state._key !== undefined) state._object[state._key] = state._child!; // trailing comma
       _endValue(state._object!);
-    } else if (token.subtype === "next") {
+    } else if (token.type === Type.OBJECT_NEXT) {
       state._object[state._key!] = state._child!;
       state._key = state._child = undefined;
       _stack.push({ _start: false });
     } else {
-      /* if (token.subtype === "value_start") */
+      /* console.assert(token.type === Type.OBJECT_VALUE_START); */
       state._key = state._child as string | undefined;
       _stack.push({ _start: false });
     }
   };
-  const _feedArray = (token: JsonToken<Opt> & { type: "array" }): void => {
+  const _feedArray = (token: JsonToken<Opt> & { category: Category.ARRAY }): void => {
     const state = _stack[_stack.length - 1] as NormalState._Array;
     if (!state._start) {
       state._index = 0;
@@ -90,12 +101,12 @@ export const createJsonNormalEmitter = <Opt extends JsonOption = JsonOption>() =
       _stack.push({ _start: false });
       return;
     }
-    /* if (token.subtype === "start") return; */
-    if (token.subtype === "end") {
+    /* console.assert(token.type !== Type.ARRAY_START); */
+    if (token.type === Type.ARRAY_END) {
       if (state._child !== undefined) (state._array as JsonArray)[state._index] = state._child!; // trailing comma
       _endValue(state._array);
     } else {
-      /* if(token.subtype === 'next') */
+      /* console.assert(token.type === Type.ARRAY_NEXT); */
       state._array[state._index] = state._child!;
       state._child = undefined;
       ++state._index;
@@ -109,46 +120,54 @@ export const createJsonNormalEmitter = <Opt extends JsonOption = JsonOption>() =
       if (state === undefined) return;
       if (_spec) {
         if (_spec === SpecialParse.Number) {
-          if (token.type !== "number") {
+          if (token.category !== Category.NUMBER) {
             _endValue(parseJsonNumber((state as NormalState._Number)._list.join("")));
             _spec = SpecialParse.None;
             state = _stack[_stack.length - 1];
           }
         } else {
-          if (token.type !== "identifier") {
+          if (token.category !== Category.IDENTIFIER) {
             _endValue((state as NormalState._String)._list.join(""));
             _spec = SpecialParse.None;
             state = _stack[_stack.length - 1];
           }
         }
-      } else if (!state._start && token.subtype === "end" && token.type !== "string") {
+      } else if (!state._start && (token.type === Type.ARRAY_END || token.type === Type.OBJECT_END)) {
         // trailing comma
         _stack.pop();
         state = _stack[_stack.length - 1];
       }
-      if (token.type === "whitespace" || token.type === "comment" || token.type === "eof") return;
+      if (
+        token.category === Category.WHITESPACE ||
+        token.category === Category.COMMENT ||
+        token.category === Category.EOF
+      )
+        return;
 
-      switch (token.type) {
-        case "number":
+      switch (token.category) {
+        case Category.NUMBER:
           _feedNumber(token);
           break;
-        case "string":
+        case Category.STRING:
           _feedString(token);
           break;
-        case "identifier":
+        case Category.IDENTIFIER:
           _feedIdentifier(token);
           break;
-        case "object":
+        case Category.OBJECT:
           _feedObject(token);
           break;
-        case "array":
+        case Category.ARRAY:
           _feedArray(token);
           break;
         default:
           if (token.done) {
-            if (token.type === "null") _endValue(null);
-            else if (token.type === "true") _endValue(true);
-            else /* if (token.type === "false") */ _endValue(false);
+            if (token.category === Category.NULL) _endValue(null);
+            else if (token.type === Type.TRUE) _endValue(true);
+            else {
+              /* console.assert(token.type === Type.FALSE); */
+              _endValue(false);
+            }
           }
       }
     },
@@ -168,6 +187,10 @@ export const jsonNormalEmit = <Opt extends JsonOption = JsonOption>(tokens: Iter
 export interface JsonNormalParser extends JsonStreamParserBase {
   feed: (s: string) => void;
   end: () => void;
+  /**
+   * Retrieves the parsed JSON value.
+   * @returns The parsed JSON value, or `undefined` if parsing is incomplete.
+   */
   get: () => JsonValue | undefined;
 }
 export const createJsonNormalParser = <Opt extends JsonOption = JsonOption>(option?: Opt): JsonNormalParser => {
@@ -186,7 +209,7 @@ export const createJsonNormalParser = <Opt extends JsonOption = JsonOption>(opti
         return _emitter.get();
       },
     },
-    _parser,
+    _parser
   );
 };
 

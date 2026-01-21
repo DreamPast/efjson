@@ -23,7 +23,12 @@ test("normal[object]", () => {
   checkNormal('{"a":1', undefined);
   checkNormal('{"a" 1}', undefined);
   checkNormal('{"a":1]', undefined);
+  checkNormal('{"a":true ]', undefined);
   checkNormal('{"a":1,', undefined);
+  checkNormal('{"a":1[', undefined);
+
+  checkNormal('{"a":1,}', { a: 1 }, JSON5_OPTION);
+  checkNormal('{"a":1,}', undefined);
 
   checkNormal(":", undefined);
 

@@ -1,16 +1,10 @@
 import { assertEq, checkNormal } from "../_util";
-import {
-  createJsonNormalParser,
-  JSON5_OPTION,
-  jsonNormalEmit,
-  JsonStreamParserStage,
-  jsonStreamParse,
-} from "../../src/index";
+import { createJsonNormalParser, JSON5_OPTION, jsonNormalEmit, Stage, jsonStreamParse } from "../../src/index";
 
 describe("other", () => {
   test("position", () => {
     const getPosInfo = (s: string) => {
-      const parser = createJsonNormalParser(JSON5_OPTION);
+      const parser = createJsonNormalParser({ ...JSON5_OPTION, acceptEmptyValue: true });
       parser.feed(s);
       parser.end();
       return {
@@ -38,19 +32,19 @@ describe("other", () => {
 
   test("stage", () => {
     const parser = createJsonNormalParser();
-    assertEq(parser.getStage(), JsonStreamParserStage.NOT_STARTED);
+    assertEq(parser.stage, Stage.NOT_STARTED);
     assertEq(parser.get(), undefined);
     parser.feed(" ");
-    assertEq(parser.getStage(), JsonStreamParserStage.NOT_STARTED);
+    assertEq(parser.stage, Stage.NOT_STARTED);
     assertEq(parser.get(), undefined);
     for (const c of '{"a":[ 1 , 2 ], "b"  : null') {
       parser.feed(c);
-      assertEq(parser.getStage(), JsonStreamParserStage.PARSING);
+      assertEq(parser.stage, Stage.PARSING);
       assertEq(parser.get(), undefined);
     }
     for (const c of "} \0") {
       parser.feed(c);
-      assertEq(parser.getStage(), JsonStreamParserStage.ENDED);
+      assertEq(parser.stage, Stage.ENDED);
       assertEq(parser.get(), { a: [1, 2], b: null });
     }
   });
@@ -60,6 +54,12 @@ describe("other", () => {
     checkNormal("/* */1", 1, JSON5_OPTION);
     checkNormal("/* * */1", 1, JSON5_OPTION);
     checkNormal("/***/1", 1, JSON5_OPTION);
+
+    checkNormal("/* *", undefined, JSON5_OPTION);
+  });
+
+  test("content_after_eof", () => {
+    checkNormal("1\x001", undefined);
   });
 
   test("special", () => {

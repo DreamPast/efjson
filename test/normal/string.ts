@@ -42,22 +42,22 @@ test("normal[string]", () => {
     const arr = ["1", "a", "A", "f", "F"];
     combineCall(
       [arr],
-      (x) => (checkNormal(`"\\u${x.join("")}`, undefined), checkNormal(`"\\u${x.join("")}"`, undefined)),
+      (x) => (checkNormal(`"\\u${x.join("")}`, undefined), checkNormal(`"\\u${x.join("")}"`, undefined))
     );
     combineCall(
       [arr, arr],
-      (x) => (checkNormal(`"\\u${x.join("")}`, undefined), checkNormal(`"\\u${x.join("")}"`, undefined)),
+      (x) => (checkNormal(`"\\u${x.join("")}`, undefined), checkNormal(`"\\u${x.join("")}"`, undefined))
     );
     combineCall(
       [arr, arr, arr],
-      (x) => (checkNormal(`"\\u${x.join("")}`, undefined), checkNormal(`"\\u${x.join("")}"`, undefined)),
+      (x) => (checkNormal(`"\\u${x.join("")}`, undefined), checkNormal(`"\\u${x.join("")}"`, undefined))
     );
     combineCall(
       [arr, arr, arr, arr],
       (x) => (
         checkNormal(`"\\u${x.join("")}`, undefined),
         checkNormal(`"\\u${x.join("")}"`, String.fromCharCode(parseInt(x.join(""), 16)))
-      ),
+      )
     );
   }
 

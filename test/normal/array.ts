@@ -14,10 +14,15 @@ test("normal[array]", () => {
   checkNormal("[}", undefined);
 
   checkNormal("[", undefined);
+  checkNormal("]", undefined);
   checkNormal("[1", undefined);
   checkNormal("[1:", undefined);
   checkNormal("[null:", undefined);
   checkNormal("[1,", undefined);
+  checkNormal("[1}", undefined);
+
+  checkNormal("[1,]", undefined);
+  checkNormal("[1,]", [1], JSON5_OPTION);
 
   checkNormal("[1 []]", undefined);
 });

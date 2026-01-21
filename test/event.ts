@@ -10,6 +10,27 @@ import {
 } from "../src/index";
 import { assertEq, assertUnreachable, checkEvent } from "./_util";
 
+const checkEventSave = (s: string, receiver: Record<string, Function>, option?: JsonOption) => {
+  let done: Record<keyof typeof receiver, Function> = {};
+  const real_receiver: Record<string, Object> = {};
+
+  for (const key in receiver) {
+    const func = receiver[key];
+    real_receiver[key] = {
+      save: (val: any) => {
+        if (done[key]) throw new Error(`${key} saved multiple times`);
+        done[key] = func;
+        func(val);
+      },
+    };
+  }
+  jsonEventParse(s, real_receiver as JsonEventReceiver, option);
+
+  const num = Object.keys(done).length;
+  if (num === 0) throw new Error(`no event saved`);
+  else if (num !== 1) throw new Error(`multiple events saved: ${Object.keys(done).join(", ")}`);
+};
+
 describe("event", () => {
   test("any", () => {
     {
@@ -110,7 +131,7 @@ No \\\\n's! \\x40",
           },
         },
       },
-      JSON5_OPTION,
+      JSON5_OPTION
     );
 
     jsonEventEmit(jsonStreamParse("{a:1,b:2,\\u0032:3,}", JSON5_OPTION), {
@@ -120,62 +141,60 @@ No \\\\n's! \\x40",
     });
   });
 
-  test("number", () => {
+  test("integer", () => {
     {
       const option: JsonOption = {
         acceptOctalInteger: true,
         acceptBinaryInteger: true,
         acceptHexadecimalInteger: true,
       };
-      {
-        let done = false;
-        jsonEventParse(
-          "0x12",
-          {
-            number: {
-              save(num) {
-                done = true;
-                assertEq(num, 0x12);
-              },
-            },
-          },
-          option,
-        );
-        assertEq(done, true);
-      }
-      {
-        let done = false;
-        jsonEventParse(
-          "0o12",
-          {
-            number: {
-              save(num) {
-                done = true;
-                assertEq(num, 0o12);
-              },
-            },
-          },
-          option,
-        );
-        assertEq(done, true);
-      }
-      {
-        let done = false;
-        jsonEventParse(
-          "0b10110",
-          {
-            number: {
-              save(num) {
-                done = true;
-                assertEq(num, 0b10110);
-              },
-            },
-          },
-          option,
-        );
-        assertEq(done, true);
-      }
+      checkEventSave("12", { integer: (num: bigint) => assertEq(num, 12n) }, option);
+      checkEventSave("0x12", { integer: (num: bigint) => assertEq(num, 0x12n) }, option);
+      checkEventSave("0o12", { integer: (num: bigint) => assertEq(num, 0o12n) }, option);
+      checkEventSave("0b10110", { integer: (num: bigint) => assertEq(num, 0b10110n) }, option);
+
+      checkEventSave("-12", { integer: (num: bigint) => assertEq(num, -12n) }, option);
+      checkEventSave("-0x12", { integer: (num: bigint) => assertEq(num, -0x12n) }, option);
+      checkEventSave("-0o12", { integer: (num: bigint) => assertEq(num, -0o12n) }, option);
+      checkEventSave("-0b10110", { integer: (num: bigint) => assertEq(num, -0b10110n) }, option);
     }
+  });
+
+  test("integer[zero]", () => {
+    const option: JsonOption = {
+      acceptOctalInteger: true,
+      acceptBinaryInteger: true,
+      acceptHexadecimalInteger: true,
+      acceptPositiveSign: true,
+    };
+
+    checkEventSave("0", { integer: (num: bigint) => assertEq(num, 0n) }, option);
+    checkEventSave("+0", { integer: (num: bigint) => assertEq(num, 0n) }, option);
+    checkEventSave("-0", { number: (num: number) => assertEq(num, -0) }, option);
+
+    checkEventSave("0x0", { integer: (num: bigint) => assertEq(num, 0n) }, option);
+    checkEventSave("+0x0", { integer: (num: bigint) => assertEq(num, 0n) }, option);
+    checkEventSave("-0x0", { integer: (num: bigint) => assertEq(num, 0n) }, option);
+
+    checkEventSave("0x00", { integer: (num: bigint) => assertEq(num, 0n) }, option);
+    checkEventSave("+0x00", { integer: (num: bigint) => assertEq(num, 0n) }, option);
+    checkEventSave("-0x00", { integer: (num: bigint) => assertEq(num, 0n) }, option);
+
+    checkEventSave("0o0", { integer: (num: bigint) => assertEq(num, 0n) }, option);
+    checkEventSave("+0o0", { integer: (num: bigint) => assertEq(num, 0n) }, option);
+    checkEventSave("-0o0", { integer: (num: bigint) => assertEq(num, 0n) }, option);
+
+    checkEventSave("0o00", { integer: (num: bigint) => assertEq(num, 0n) }, option);
+    checkEventSave("+0o00", { integer: (num: bigint) => assertEq(num, 0n) }, option);
+    checkEventSave("-0o00", { integer: (num: bigint) => assertEq(num, 0n) }, option);
+
+    checkEventSave("0b0", { integer: (num: bigint) => assertEq(num, 0n) }, option);
+    checkEventSave("+0b0", { integer: (num: bigint) => assertEq(num, 0n) }, option);
+    checkEventSave("-0b0", { integer: (num: bigint) => assertEq(num, 0n) }, option);
+
+    checkEventSave("0b00", { integer: (num: bigint) => assertEq(num, 0n) }, option);
+    checkEventSave("+0b00", { integer: (num: bigint) => assertEq(num, 0n) }, option);
+    checkEventSave("-0b00", { integer: (num: bigint) => assertEq(num, 0n) }, option);
   });
 
   test("mismatch", () => {
@@ -194,9 +213,11 @@ No \\\\n's! \\x40",
       ["[]", ["array"]],
       ["{}", ["object"]],
     ];
+    const type_list = ["null", "integer", "number", "boolean", "string", "array", "object"];
+
     for (let i = 0; i < list.length; i++)
-      for (let j = 0; j < list.length; j++) {
-        checkEvent(list[i][0], { [list[j][1][0]]: { save() {} } }, !list[i][1].includes(list[j][1][0]), JSON5_OPTION);
+      for (const type of type_list) {
+        checkEvent(list[i][0], { [type]: { save() {} } }, !list[i][1].includes(type), JSON5_OPTION);
       }
   });
 
@@ -221,56 +242,24 @@ No \\\\n's! \\x40",
 
   test("number", () => {
     checkEvent("1.2", {
-      save() {
-        assertUnreachable("parent");
-      },
-      number: {
-        save(val) {
-          assertEq(val, 1.2);
-        },
-      },
-      integer: {
-        save() {
-          assertUnreachable("child");
-        },
-      },
+      save: () => assertUnreachable("parent"),
+      number: { save: (val) => assertEq(val, 1.2) },
+      integer: { save: () => assertUnreachable("child") },
     });
     checkEvent("1.2", {
-      save(val) {
-        assertEq(val, 1.2);
-      },
-      integer: {
-        save() {
-          assertUnreachable("child");
-        },
-      },
+      save: (val) => assertEq(val, 1.2),
+      integer: { save: () => assertUnreachable("child") },
       number: {},
     });
 
     checkEvent("1", {
-      save() {
-        assertUnreachable("parent");
-      },
-      number: {
-        save() {
-          assertUnreachable("child");
-        },
-      },
-      integer: {
-        save(val) {
-          assertEq(val, 1n);
-        },
-      },
+      save: () => assertUnreachable("parent"),
+      number: { save: () => assertUnreachable("child") },
+      integer: { save: (val) => assertEq(val, 1n) },
     });
     checkEvent("1", {
-      save(val) {
-        assertEq(val, 1);
-      },
-      number: {
-        save() {
-          assertUnreachable("child");
-        },
-      },
+      save: (val) => assertEq(val, 1),
+      number: { save: () => assertUnreachable("child") },
       integer: {},
     });
   });
@@ -281,7 +270,31 @@ No \\\\n's! \\x40",
       `{\\u1234:11,A:12}`,
       { object: { keyReceiver: { feed() {}, string: { save() {} } } } },
       false,
-      JSON5_OPTION,
+      JSON5_OPTION
+    );
+  });
+
+  test("array", () => {
+    checkEvent(
+      "[1,2]",
+      {
+        array: {
+          set(index, value) {
+            switch (index) {
+              case 0:
+                assertEq(value, 1);
+                break;
+              case 1:
+                assertEq(value, 2);
+                break;
+              default:
+                assertUnreachable(`index ${index}`);
+            }
+          },
+        },
+      },
+      false,
+      JSON5_OPTION
     );
   });
 });

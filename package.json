@@ -1,6 +1,6 @@
 {
   "name": "efjson",
-  "version": "0.14.1",
+  "version": "0.15.0",
   "description": "a streaming and event-driven JSON parser (with support for JSON5 and JSONC)",
   "main": "lib/efjson.mjs",
   "types": "lib/efjson.d.ts",
@@ -26,8 +26,8 @@
     "postpack": "rimraf lib/ tmp/"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.14",
-    "jest": "^29.7.0",
+    "@types/jest": "^30.0.0",
+    "jest": "^30.2.0",
     "prettier": "^3.5.3",
     "rimraf": "^6.0.1",
     "rollup": "^4.41.0",
@@ -36,7 +36,7 @@
     "ts-jest": "^29.3.4",
     "tslib": "^2.8.1",
     "tsx": "^4.19.4",
-    "typescript": "^5.8.3",
+    "typescript": "^5.9.3",
     "uglify-js": "^3.19.3"
   },
   "homepage": "https://github.com/DreamPast/efjson#readme",

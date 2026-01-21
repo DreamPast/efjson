@@ -40,6 +40,7 @@ describe("pointer", () => {
 
       checkPointerGet(1, { "": { "": 1 } }, "//");
     }
+    checkPointerGet(undefined, [], `/${Number.MAX_SAFE_INTEGER * 2}`);
   });
 
   test("compile", () => {
@@ -164,6 +165,9 @@ describe("pointer", () => {
 
       checkPointerSet(undefined, obj, "0/-", 10, "");
       checkPointerSet(undefined, obj, "0+0", 10, "/-");
+    }
+    {
+      checkPointerGet(1, [1], "+0", "/0");
     }
   });
 });

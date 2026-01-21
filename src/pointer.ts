@@ -49,9 +49,10 @@ const jsonPointerMove = (obj: JsonValue, path: string[], start = 0, last = path.
   }
   return obj;
 };
+/* if the second return value is -2, should return index */
 const jsonPointerRelative = (
   path: string | string[],
-  start: string | string[],
+  start: string | string[]
 ): [(string | [boolean, number])[], number] => {
   if (typeof path === "string" && path.startsWith("/")) return [jsonPointerCompile(path), -1]; // absolute JSON pointer
   const arr: (string | [boolean, number])[] = typeof start === "string" ? jsonPointerCompile(start) : start.slice();
@@ -90,7 +91,7 @@ const jsonPointerRelative = (
 };
 
 export const jsonPointerGet = (obj: JsonValue, path: string | string[], start?: string | string[]): JsonValue => {
-  if (start == null) return jsonPointerMove(obj, typeof path === "string" ? jsonPointerCompile(path) : path);
+  if (start === undefined) return jsonPointerMove(obj, typeof path === "string" ? jsonPointerCompile(path) : path);
 
   const [arr, flag] = jsonPointerRelative(path, start);
   if (flag === -2) {
@@ -98,11 +99,11 @@ export const jsonPointerGet = (obj: JsonValue, path: string | string[], start?: 
     if (back === undefined) throw new JsonPointerError("cannot get position from root");
     obj = jsonPointerMove(obj, arr as string[]);
     if (typeof back === "string") {
-      if (Array.isArray(obj)) return back === "-" ? obj.length : tryToInteger(back as string);
+      if (Array.isArray(obj)) return back === "-" ? obj.length : tryToInteger(back);
       else if (typeof obj === "object" && obj !== null) return back;
       else throw new JsonPointerError("not an object or array");
     } else {
-      const [fromEnd, offset] = back as [boolean, number];
+      const [fromEnd, offset] = back;
       if (!Array.isArray(obj)) throw new JsonPointerError("not an array");
       const index = fromEnd ? obj.length + offset : offset;
       if (index < 0 || index >= obj.length) throw new JsonPointerError("array index exceed");
@@ -124,9 +125,9 @@ export const jsonPointerSet = (
   obj: JsonValue,
   path: string | string[],
   value: JsonValue,
-  start?: string | string[],
+  start?: string | string[]
 ): void => {
-  if (start == null) {
+  if (start === undefined) {
     const arr = typeof path === "string" ? jsonPointerCompile(path) : path;
     obj = jsonPointerMove(obj, arr, 0, arr.length - 1);
     if (arr.length === 0) throw new JsonPointerError("cannot set value to root");
@@ -178,7 +179,7 @@ export const jsonPointer = ((
   obj: JsonValue,
   path: string | string[],
   value?: JsonValue | undefined,
-  start?: string | string[],
+  start?: string | string[]
 ) => {
   return value === undefined ? jsonPointerGet(obj, path, start) : jsonPointerSet(obj, path, value, start);
 }) as JsonPointerFunction;

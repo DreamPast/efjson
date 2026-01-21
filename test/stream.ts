@@ -1,115 +1,123 @@
-import { createJsonStreamParser, JSON5_OPTION, jsonStreamParse, JsonToken } from "../src/index";
+import {
+  Category,
+  createJsonStreamParser,
+  JSON5_OPTION,
+  jsonStreamParse,
+  JsonToken,
+  Location,
+  Type,
+} from "../src/index";
 import { assertElementSubset, assertEq } from "./_util";
 
 describe("stream", () => {
   test("number", () => {
     assertElementSubset(jsonStreamParse("-1.0e+3"), [
-      { type: "number", subtype: "integer_sign" },
-      { type: "number", subtype: "integer_digit" },
-      { type: "number", subtype: "fraction_start" },
-      { type: "number", subtype: "fraction_digit" },
-      { type: "number", subtype: "exponent_start" },
-      { type: "number", subtype: "exponent_sign" },
-      { type: "number", subtype: "exponent_digit" },
-      { type: "eof", subtype: undefined },
+      { category: Category.NUMBER, type: Type.NUMBER_INTEGER_SIGN },
+      { category: Category.NUMBER, type: Type.NUMBER_INTEGER_DIGIT },
+      { category: Category.NUMBER, type: Type.NUMBER_FRACTION_START },
+      { category: Category.NUMBER, type: Type.NUMBER_FRACTION_DIGIT },
+      { category: Category.NUMBER, type: Type.NUMBER_EXPONENT_START },
+      { category: Category.NUMBER, type: Type.NUMBER_EXPONENT_SIGN },
+      { category: Category.NUMBER, type: Type.NUMBER_EXPONENT_DIGIT },
+      { category: Category.EOF, type: Type.EOF },
     ] as JsonToken[]);
   });
 
   test("object", () => {
     assertElementSubset(jsonStreamParse('{"a":{},"b":1}'), [
-      { location: "root", type: "object", subtype: "start" },
-      { location: "key", type: "string", subtype: "start" },
-      { location: "key", type: "string", subtype: "normal" },
-      { location: "key", type: "string", subtype: "end" },
-      { location: "object", type: "object", subtype: "value_start" },
-      { location: "value", type: "object", subtype: "start" },
-      { location: "value", type: "object", subtype: "end" },
-      { location: "object", type: "object", subtype: "next" },
+      { category: Category.OBJECT, type: Type.OBJECT_START },
+      { category: Category.STRING, type: Type.STRING_START },
+      { category: Category.STRING, type: Type.STRING_NORMAL },
+      { category: Category.STRING, type: Type.STRING_END },
+      { category: Category.OBJECT, type: Type.OBJECT_VALUE_START },
+      { category: Category.OBJECT, type: Type.OBJECT_START },
+      { category: Category.OBJECT, type: Type.OBJECT_END },
+      { category: Category.OBJECT, type: Type.OBJECT_NEXT },
 
-      { location: "key", type: "string", subtype: "start" },
-      { location: "key", type: "string", subtype: "normal" },
-      { location: "key", type: "string", subtype: "end" },
-      { location: "object", type: "object", subtype: "value_start" },
-      { location: "value", type: "number", subtype: "integer_digit" },
-      { location: "root", type: "object", subtype: "end" },
-      { location: "root", type: "eof", subtype: undefined },
+      { category: Category.STRING, type: Type.STRING_START },
+      { category: Category.STRING, type: Type.STRING_NORMAL },
+      { category: Category.STRING, type: Type.STRING_END },
+      { category: Category.OBJECT, type: Type.OBJECT_VALUE_START },
+      { category: Category.NUMBER, type: Type.NUMBER_INTEGER_DIGIT },
+      { category: Category.OBJECT, type: Type.OBJECT_END },
+      { category: Category.EOF, type: Type.EOF },
     ] as JsonToken[]);
 
     assertElementSubset(jsonStreamParse('{"a":{},}', JSON5_OPTION), [
-      { location: "root", type: "object", subtype: "start" },
-      { location: "key", type: "string", subtype: "start" },
-      { location: "key", type: "string", subtype: "normal" },
-      { location: "key", type: "string", subtype: "end" },
-      { location: "object", type: "object", subtype: "value_start" },
-      { location: "value", type: "object", subtype: "start" },
-      { location: "value", type: "object", subtype: "end" },
-      { location: "object", type: "object", subtype: "next" },
-      { location: "root", type: "object", subtype: "end" },
-      { location: "root", type: "eof", subtype: undefined },
+      { category: Category.OBJECT, type: Type.OBJECT_START },
+      { category: Category.STRING, type: Type.STRING_START },
+      { category: Category.STRING, type: Type.STRING_NORMAL },
+      { category: Category.STRING, type: Type.STRING_END },
+      { category: Category.OBJECT, type: Type.OBJECT_VALUE_START },
+      { category: Category.OBJECT, type: Type.OBJECT_START },
+      { category: Category.OBJECT, type: Type.OBJECT_END },
+      { category: Category.OBJECT, type: Type.OBJECT_NEXT },
+      { category: Category.OBJECT, type: Type.OBJECT_END },
+      { category: Category.EOF, type: Type.EOF },
     ] as JsonToken[]);
   });
 
   test("array", () => {
     assertElementSubset(jsonStreamParse("[[],[1]]"), [
-      { location: "root", type: "array", subtype: "start" },
-      { location: "element", type: "array", subtype: "start" },
-      { location: "element", type: "array", subtype: "end" },
-      { location: "array", type: "array", subtype: "next" },
-      { location: "element", type: "array", subtype: "start" },
-      { location: "element", type: "number", subtype: "integer_digit" },
-      { location: "element", type: "array", subtype: "end" },
-      { location: "root", type: "array", subtype: "end" },
-      { location: "root", type: "eof", subtype: undefined },
+      { category: Category.ARRAY, type: Type.ARRAY_START },
+      { category: Category.ARRAY, type: Type.ARRAY_START },
+      { category: Category.ARRAY, type: Type.ARRAY_END },
+      { category: Category.ARRAY, type: Type.ARRAY_NEXT },
+      { category: Category.ARRAY, type: Type.ARRAY_START },
+      { category: Category.NUMBER, type: Type.NUMBER_INTEGER_DIGIT },
+      { category: Category.ARRAY, type: Type.ARRAY_END },
+      { category: Category.ARRAY, type: Type.ARRAY_END },
+      { category: Category.EOF, type: Type.EOF },
     ] as JsonToken[]);
 
     assertElementSubset(jsonStreamParse("[1,]", JSON5_OPTION), [
-      { location: "root", type: "array", subtype: "start" },
-      { location: "element", type: "number", subtype: "integer_digit" },
-      { location: "array", type: "array", subtype: "next" },
-      { location: "root", type: "array", subtype: "end" },
-      { location: "root", type: "eof", subtype: undefined },
+      { category: Category.ARRAY, type: Type.ARRAY_START },
+      { category: Category.NUMBER, type: Type.NUMBER_INTEGER_DIGIT },
+      { category: Category.ARRAY, type: Type.ARRAY_NEXT },
+      { category: Category.ARRAY, type: Type.ARRAY_END },
+      { category: Category.EOF, type: Type.EOF },
     ] as JsonToken[]);
   });
 
   test("literal", () => {
     assertElementSubset(jsonStreamParse("null"), [
-      { type: "null", subtype: undefined, index: 0, done: undefined },
-      { type: "null", subtype: undefined, index: 1, done: undefined },
-      { type: "null", subtype: undefined, index: 2, done: undefined },
-      { type: "null", subtype: undefined, index: 3, done: true },
-      { type: "eof", subtype: undefined },
+      { category: Category.NULL, type: Type.NULL, index: 0, done: false },
+      { category: Category.NULL, type: Type.NULL, index: 1, done: false },
+      { category: Category.NULL, type: Type.NULL, index: 2, done: false },
+      { category: Category.NULL, type: Type.NULL, index: 3, done: true },
+      { category: Category.EOF, type: Type.EOF },
     ] as JsonToken[]);
     assertElementSubset(jsonStreamParse("true"), [
-      { type: "true", subtype: undefined, index: 0, done: undefined },
-      { type: "true", subtype: undefined, index: 1, done: undefined },
-      { type: "true", subtype: undefined, index: 2, done: undefined },
-      { type: "true", subtype: undefined, index: 3, done: true },
-      { type: "eof", subtype: undefined },
+      { category: Category.BOOLEAN, type: Type.TRUE, index: 0, done: false },
+      { category: Category.BOOLEAN, type: Type.TRUE, index: 1, done: false },
+      { category: Category.BOOLEAN, type: Type.TRUE, index: 2, done: false },
+      { category: Category.BOOLEAN, type: Type.TRUE, index: 3, done: true },
+      { category: Category.EOF, type: Type.EOF },
     ] as JsonToken[]);
     assertElementSubset(jsonStreamParse("false"), [
-      { type: "false", subtype: undefined, index: 0, done: undefined },
-      { type: "false", subtype: undefined, index: 1, done: undefined },
-      { type: "false", subtype: undefined, index: 2, done: undefined },
-      { type: "false", subtype: undefined, index: 3, done: undefined },
-      { type: "false", subtype: undefined, index: 4, done: true },
-      { type: "eof", subtype: undefined },
+      { category: Category.BOOLEAN, type: Type.FALSE, index: 0, done: false },
+      { category: Category.BOOLEAN, type: Type.FALSE, index: 1, done: false },
+      { category: Category.BOOLEAN, type: Type.FALSE, index: 2, done: false },
+      { category: Category.BOOLEAN, type: Type.FALSE, index: 3, done: false },
+      { category: Category.BOOLEAN, type: Type.FALSE, index: 4, done: true },
+      { category: Category.EOF, type: Type.EOF },
     ] as JsonToken[]);
   });
 
   test("string", () => {
     assertElementSubset(jsonStreamParse('"\\u1234\\na"'), [
-      { type: "string", subtype: "start" },
-      { type: "string", subtype: "escape_start" },
-      { type: "string", subtype: "escape_unicode_start" },
-      { type: "string", subtype: "escape_unicode", escaped_value: undefined },
-      { type: "string", subtype: "escape_unicode", escaped_value: undefined },
-      { type: "string", subtype: "escape_unicode", escaped_value: undefined },
-      { type: "string", subtype: "escape_unicode", escaped_value: "\u1234" },
-      { type: "string", subtype: "escape_start" },
-      { type: "string", subtype: "escape", escaped_value: "\n" },
-      { type: "string", subtype: "normal" },
-      { type: "string", subtype: "end" },
-      { type: "eof", subtype: undefined },
+      { category: Category.STRING, type: Type.STRING_START },
+      { category: Category.STRING, type: Type.STRING_ESCAPE_START },
+      { category: Category.STRING, type: Type.STRING_ESCAPE_UNICODE_START },
+      { category: Category.STRING, type: Type.STRING_ESCAPE_UNICODE, escaped: undefined },
+      { category: Category.STRING, type: Type.STRING_ESCAPE_UNICODE, escaped: undefined },
+      { category: Category.STRING, type: Type.STRING_ESCAPE_UNICODE, escaped: undefined },
+      { category: Category.STRING, type: Type.STRING_ESCAPE_UNICODE, escaped: "\u1234" },
+      { category: Category.STRING, type: Type.STRING_ESCAPE_START },
+      { category: Category.STRING, type: Type.STRING_ESCAPE, escaped: "\n" },
+      { category: Category.STRING, type: Type.STRING_NORMAL },
+      { category: Category.STRING, type: Type.STRING_END },
+      { category: Category.EOF, type: Type.EOF },
     ] as JsonToken[]);
   });
 
@@ -132,21 +140,32 @@ describe("stream", () => {
     assertEq(getPosInfo("\n1"), { line: 1, column: 1, position: 2 });
   });
 
+  test("location", () => {
+    const parser = createJsonStreamParser();
+    assertEq(parser.location, Location.ROOT);
+    parser.feed('{"a');
+    assertEq(parser.location, Location.KEY);
+    parser.feed('":1');
+    assertEq(parser.location, Location.VALUE);
+    parser.feed("}");
+    assertEq(parser.location, Location.ROOT);
+  });
+
   test("copy", () => {
     const s = '"\\u1234\\na"';
     const tokens = [
-      { type: "string", subtype: "start" },
-      { type: "string", subtype: "escape_start" },
-      { type: "string", subtype: "escape_unicode_start" },
-      { type: "string", subtype: "escape_unicode", escaped_value: undefined },
-      { type: "string", subtype: "escape_unicode", escaped_value: undefined },
-      { type: "string", subtype: "escape_unicode", escaped_value: undefined },
-      { type: "string", subtype: "escape_unicode", escaped_value: "\u1234" },
-      { type: "string", subtype: "escape_start" },
-      { type: "string", subtype: "escape", escaped_value: "\n" },
-      { type: "string", subtype: "normal" },
-      { type: "string", subtype: "end" },
-      { type: "eof", subtype: undefined },
+      { category: Category.STRING, type: Type.STRING_START },
+      { category: Category.STRING, type: Type.STRING_ESCAPE_START },
+      { category: Category.STRING, type: Type.STRING_ESCAPE_UNICODE_START },
+      { category: Category.STRING, type: Type.STRING_ESCAPE_UNICODE, escaped: undefined },
+      { category: Category.STRING, type: Type.STRING_ESCAPE_UNICODE, escaped: undefined },
+      { category: Category.STRING, type: Type.STRING_ESCAPE_UNICODE, escaped: undefined },
+      { category: Category.STRING, type: Type.STRING_ESCAPE_UNICODE, escaped: "\u1234" },
+      { category: Category.STRING, type: Type.STRING_ESCAPE_START },
+      { category: Category.STRING, type: Type.STRING_ESCAPE, escaped: "\n" },
+      { category: Category.STRING, type: Type.STRING_NORMAL },
+      { category: Category.STRING, type: Type.STRING_END },
+      { category: Category.EOF, type: Type.EOF },
     ];
     const parser = createJsonStreamParser();
     for (let i = 0; i < s.length; ++i) {
